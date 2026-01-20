@@ -21,7 +21,8 @@ Chosen over C++ for:
 
 - **Memory safety** without runtime overhead
 - **Cargo** — superior cross-platform build system vs CMake complexity
-- **Ecosystem** — `ratatui` (17.5k⭐) is the de facto TUI standard; `llama-cpp-2` provides battle-tested llama.cpp bindings
+- **Ecosystem** — `ratatui` (17.5k stars) is the de facto TUI standard;
+    `llama-cpp-2` provides battle-tested llama.cpp bindings
 - **Future-proof** — Tauri enables native GUI with web frontend sharing the same Rust core
 
 ### Inference: llama-cpp-2
