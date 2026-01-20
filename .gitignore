@@ -1,0 +1,27 @@
+# Rust
+/target/
+Cargo.lock
+
+# Models (large files)
+/models/
+
+# Agent working directory (session-specific, not for git)
+/.agent/
+
+# Python
+/proto/.venv/
+/proto/__pycache__/
+*.pyc
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

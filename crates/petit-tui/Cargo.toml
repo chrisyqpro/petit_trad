@@ -1,0 +1,16 @@
+[package]
+name = "petit-tui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Terminal UI for petit_trad translator"
+
+[[bin]]
+name = "petit"
+path = "src/main.rs"
+
+[dependencies]
+petit-core = { path = "../petit-core" }
+anyhow.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true

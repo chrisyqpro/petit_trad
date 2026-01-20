@@ -1,0 +1,26 @@
+# petit_trad default configuration
+
+[model]
+# Path to the GGUF model file
+# Options: translate-gemma-4b, translate-gemma-12b (default), translate-gemma-27b
+path = "models/translate-gemma-12b-q4_k_m.gguf"
+
+# Number of layers to offload to GPU (999 = all, 0 = CPU only)
+gpu_layers = 999
+
+# Context size (tokens)
+context_size = 2048
+
+# CPU threads for inference
+threads = 4
+
+[translation]
+# Default source language (ISO 639-1)
+default_source = "en"
+
+# Default target language (ISO 639-1)
+default_target = "fr"
+
+[ui]
+# Show language codes instead of full names
+compact_lang_display = false

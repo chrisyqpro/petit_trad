@@ -1,0 +1,49 @@
+petit_trad
+===========
+
+A local translation tool that runs Google's TranslateGemma models locally.
+
+Goals
+- Run TranslateGemma locally (4B / 12B / 27B) without cloud APIs.
+- Terminal-first UX (TUI) with future GUI planned.
+- Cross-platform support: WSL (primary dev), Linux, macOS, Windows.
+
+Quick start (development)
+
+1. Install Rust and Cargo.
+2. Build workspace:
+
+```bash
+cargo check
+```
+
+3. Run the TUI (placeholder binary until UI is implemented):
+
+```bash
+cargo run -p petit-tui --release
+```
+
+Python prototype
+
+A Python prototype is provided under `proto/` with dependencies listed in
+`proto/requirements.txt`. Use it to validate TranslateGemma prompt format and
+translation quality before implementing the Rust inference backend.
+
+Models
+
+By default the project expects a GGUF model in `models/`.
+Default (recommended for 16GB VRAM): `translate-gemma-12b-q4_k_m.gguf`.
+Alternative sizes: `translate-gemma-4b-*` and `translate-gemma-27b-*`.
+
+Docs and agent files
+
+- Permanent docs: `doc/`
+- Agent runtime files and session data (git-ignored): `.agent/`
+
+Contributing
+
+See `doc/architecture.md` and `.agent/plan.md` for design and current plan.
+
+License
+
+This project is licensed under GPLv3. See `LICENSE` for details.

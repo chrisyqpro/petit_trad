@@ -1,0 +1,21 @@
+[package]
+name = "petit-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Translation engine using TranslateGemma"
+
+[dependencies]
+thiserror.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+toml.workspace = true
+
+# Inference backend (uncomment when implementing)
+# llama-cpp-2 = { workspace = true, optional = true }
+
+[features]
+default = []
+cuda = []
+metal = []
+vulkan = []

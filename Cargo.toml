@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/petit-core",
+    "crates/petit-tui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/user/petit_trad"
+
+[workspace.dependencies]
+# Core
+thiserror = "1.0"
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+
+# Inference (uncomment when ready)
+# llama-cpp-2 = "0.1"
+
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Async (optional)
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
