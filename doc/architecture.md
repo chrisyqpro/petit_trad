@@ -53,6 +53,8 @@ Rust bindings to llama.cpp:
 
 - Validate TranslateGemma prompt format and behavior before Rust implementation
 - Quick iteration on translation quality experiments
+- Use `uv` to manage python environment (use the correct version) and run code
+- Use `ruff` and `ty` to format and check Python code
 
 ---
 
