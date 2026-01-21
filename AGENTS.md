@@ -30,3 +30,4 @@ doc/                 # Permanent documentation
 4. **Cross-platform** — Must work on WSL, Linux, macOS, Windows
 5. **Markdown line length** — Keep lines ≤120 characters in git-tracked `doc/` Markdown files
 6. **NEVER** use emoji
+7. **Git signatures** — Agents may skip git signature for automated tasks but NEVER skip it for merge commits
