@@ -7,6 +7,7 @@
 
 pub mod config;
 pub mod error;
+pub mod language;
 
 pub use config::Config;
 pub use error::Error;
