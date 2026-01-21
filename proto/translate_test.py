@@ -1,138 +1,112 @@
 #!/usr/bin/env python3
-"""TranslateGemma prototype - validates model behavior and prompt format."""
+"""TranslateGemma GGUF prototype - tests llama-cpp-python inference."""
 
 import time
 from pathlib import Path
 
-import torch
 from llama_cpp import Llama
-from transformers import AutoTokenizer
 
-# Model paths
-HF_MODEL_DIR = Path(__file__).parent.parent / "models" / "translategemma-12b-it"
-GGUF_DIR = Path(__file__).parent.parent / "models" / "translategemma-12b-it-GGUF"
-GGUF_QUANT = "Q8_0"
+# Model path
+MODEL_PATH = Path(__file__).parent.parent / "models" / "translategemma-12b-it-GGUF"
+GGUF_FILE = MODEL_PATH / "translategemma-12b-it.Q8_0.gguf"
 
 
-def find_gguf_file(gguf_dir: Path, quant: str) -> Path | None:
-    if not gguf_dir.exists():
-        return None
-    matches = sorted(gguf_dir.glob(f"*{quant}*.gguf"))
-    if matches:
-        return matches[0]
-    return None
-
-
-def load_tokenizer(tokenizer_dir: Path):
-    if tokenizer_dir.exists():
-        return AutoTokenizer.from_pretrained(tokenizer_dir)
-    raise FileNotFoundError(
-        f"Tokenizer directory not found: {tokenizer_dir}. Download HF model files first."
-    )
-
-
-def load_gguf_model(gguf_path: Path) -> Llama:
-    print(f"Loading GGUF model: {gguf_path}")
-    return Llama(
-        model_path=str(gguf_path),
-        n_ctx=2048,
-        n_gpu_layers=-1,
-        n_threads=0,
-        logits_all=False,
-        embedding=False,
+def load_model(model_path: Path, n_gpu_layers: int = -1, n_ctx: int = 2048):
+    """Load GGUF model with llama-cpp."""
+    print(f"Loading model from: {model_path}")
+    model = Llama(
+        model_path=str(model_path),
+        n_gpu_layers=n_gpu_layers,  # -1 = all layers on GPU
+        n_ctx=n_ctx,
         verbose=False,
     )
+    return model
 
 
-def build_prompt(tokenizer, text: str, source_lang: str, target_lang: str) -> str:
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "source_lang_code": source_lang,
-                    "target_lang_code": target_lang,
-                    "text": text,
-                }
-            ],
-        }
-    ]
-    return tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True,
+def build_prompt(text: str, source_lang: str, target_lang: str) -> str:
+    """Build TranslateGemma prompt.
+
+    The model works best with a direct translation instruction.
+    """
+    # Direct translation request without extra context
+    prompt = (
+        f"<start_of_turn>user\n"
+        f"[{source_lang}->{target_lang}] {text}<end_of_turn>\n"
+        f"<start_of_turn>model\n"
     )
+    return prompt
 
 
-def translate_gguf(
-    llm: Llama,
-    tokenizer,
+def translate(
+    model: Llama,
     text: str,
     source_lang: str,
     target_lang: str,
-    max_new_tokens: int = 256,
+    max_tokens: int = 256,
 ) -> tuple[str, float]:
-    prompt = build_prompt(tokenizer, text, source_lang, target_lang)
+    """Translate text and return (translation, time_seconds)."""
+    prompt = build_prompt(text, source_lang, target_lang)
+
     start = time.perf_counter()
-    output = llm(
+    output = model(
         prompt,
-        max_tokens=max_new_tokens,
-        temperature=0.0,
-        stop=["<end_of_turn>", "</s>", "<eos>"] if "<end_of_turn>" in prompt else None,
+        max_tokens=max_tokens,
+        stop=["<end_of_turn>", "<eos>"],
+        echo=False,
     )
     elapsed = time.perf_counter() - start
-    text_out = output["choices"][0]["text"].strip()
-    return text_out, elapsed
+
+    translation: str = output["choices"][0]["text"].strip()  # type: ignore[index]
+    return translation, elapsed
 
 
 def main():
     print("=" * 60)
-    print("TranslateGemma Prototype")
+    print("TranslateGemma GGUF Prototype (llama-cpp)")
     print("=" * 60)
 
-    # Check CUDA
-    print(f"\nCUDA available: {torch.cuda.is_available()}")
-    if torch.cuda.is_available():
-        print(f"CUDA device: {torch.cuda.get_device_name(0)}")
-        print(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+    if not GGUF_FILE.exists():
+        print(f"ERROR: Model not found at {GGUF_FILE}")
+        return
 
-    # Load tokenizer and GGUF model
-    print("\nLoading tokenizer...")
-    tokenizer = load_tokenizer(HF_MODEL_DIR)
-    print("Tokenizer loaded")
+    # Load model
+    print("\nLoading model...")
+    model = load_model(GGUF_FILE)
+    print("Model loaded successfully")
 
-    gguf_path = find_gguf_file(GGUF_DIR, GGUF_QUANT)
-    if gguf_path is None:
-        raise FileNotFoundError(
-            f"GGUF file not found in {GGUF_DIR}. Expected a file with '{GGUF_QUANT}' "
-            "in the name."
-        )
-    print("\nLoading GGUF model...")
-    llm = load_gguf_model(gguf_path)
-    print("GGUF model loaded successfully")
-
-    # Test translations - use ISO 639-1 language codes
+    # Test translations - use ISO 639-1 codes
     test_cases = [
         ("Hello, how are you?", "en", "fr"),
         ("The weather is nice today.", "en", "de"),
         ("I love programming.", "en", "es"),
+        ("Good morning.", "en", "zh"),
+        ("Thank you very much.", "en", "ja"),
+        ("Je suis developpeur.", "fr", "en"),
+        ("Ich lerne Rust.", "de", "en"),
     ]
 
     print("\n" + "=" * 60)
     print("Translation Tests")
     print("=" * 60)
 
+    results = []
     for text, src, tgt in test_cases:
         print(f"\n[{src} -> {tgt}]")
         print(f"  Input:  {text}")
-        translation, elapsed = translate_gguf(llm, tokenizer, text, src, tgt)
+        translation, elapsed = translate(model, text, src, tgt)
         print(f"  Output: {translation}")
         print(f"  Time:   {elapsed:.2f}s")
+        results.append((src, tgt, text, translation, elapsed))
 
-    # VRAM usage after inference
-    if torch.cuda.is_available():
-        print(f"\nVRAM used: {torch.cuda.memory_allocated() / 1e9:.1f} GB")
+    # Summary
+    print("\n" + "=" * 60)
+    print("Summary")
+    print("=" * 60)
+    total_time = sum(r[4] for r in results)
+    avg_time = total_time / len(results)
+    print(f"Total tests: {len(results)}")
+    print(f"Average time: {avg_time:.2f}s")
+    print(f"Total time: {total_time:.2f}s")
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ Cargo.lock
 # Python
 /proto/.venv/
 /proto/__pycache__/
+/proto/.ruff_cache/
 *.pyc
 
 # IDE
