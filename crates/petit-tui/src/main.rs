@@ -55,7 +55,11 @@ fn run() -> Result<()> {
     let (mut terminal, guard) = setup_terminal()?;
     guard.install_panic_hook();
 
-    let mut app = App::with_languages(app_config.source_lang, app_config.target_lang);
+    let mut app = App::with_languages(
+        app_config.source_lang,
+        app_config.target_lang,
+        app_config.compact_lang_display,
+    );
     let (tx, rx, worker) = start_translation_worker(app_config.core);
     let result = run_app(&mut terminal, &mut app, &tx, &rx);
     drop(tx);

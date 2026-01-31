@@ -90,16 +90,29 @@ fn header_widget(app: &App) -> Paragraph<'static> {
         Focus::Output => "Output",
     };
 
-    let line = Line::from(vec![
-        Span::styled("Source: ", label_style),
-        Span::styled(app.source_lang.clone(), value_style),
-        Span::raw("  "),
-        Span::styled("Target: ", label_style),
-        Span::styled(app.target_lang.clone(), value_style),
-        Span::raw("  "),
-        Span::styled("Focus: ", label_style),
-        Span::styled(focus_label, value_style),
-    ]);
+    let line = if app.compact_lang_display {
+        Line::from(vec![
+            Span::styled("Lang: ", label_style),
+            Span::styled(
+                format!("{}→{}", app.source_lang, app.target_lang),
+                value_style,
+            ),
+            Span::raw("  "),
+            Span::styled("Focus: ", label_style),
+            Span::styled(focus_label, value_style),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled("Source: ", label_style),
+            Span::styled(app.source_lang.clone(), value_style),
+            Span::raw("  "),
+            Span::styled("Target: ", label_style),
+            Span::styled(app.target_lang.clone(), value_style),
+            Span::raw("  "),
+            Span::styled("Focus: ", label_style),
+            Span::styled(focus_label, value_style),
+        ])
+    };
 
     Paragraph::new(line)
         .alignment(Alignment::Left)

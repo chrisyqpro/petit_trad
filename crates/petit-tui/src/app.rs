@@ -28,6 +28,8 @@ pub struct App {
     pub status_message: Option<String>,
     /// Language edit state (if active)
     lang_edit: Option<LangEdit>,
+    /// Show compact language display in header
+    pub compact_lang_display: bool,
 }
 
 /// Which pane is currently focused
@@ -70,15 +72,17 @@ impl Default for App {
             output_scroll: 0,
             status_message: None,
             lang_edit: None,
+            compact_lang_display: false,
         }
     }
 }
 
 impl App {
-    pub fn with_languages(source_lang: String, target_lang: String) -> Self {
+    pub fn with_languages(source_lang: String, target_lang: String, compact_lang_display: bool) -> Self {
         Self {
             source_lang,
             target_lang,
+            compact_lang_display,
             ..Self::default()
         }
     }
