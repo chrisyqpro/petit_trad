@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::app::App;
+use crate::app::{App, Focus, LangTarget};
 
 mod app;
 mod ui;
@@ -47,8 +47,10 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
 
         let timeout = tick_rate.saturating_sub(last_tick.elapsed());
         if event::poll(timeout)? {
-            if let Event::Key(key) = event::read()? {
-                handle_key_event(app, key);
+            match event::read()? {
+                Event::Key(key) => handle_key_event(app, key),
+                Event::Paste(text) => app.insert_str(&text),
+                _ => {}
             }
         }
 
@@ -67,7 +69,113 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
 fn handle_key_event(app: &mut App, key: KeyEvent) {
     if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
         app.should_quit = true;
+        return;
     }
+
+    if app.is_editing_language() {
+        handle_language_edit_key(app, key);
+        return;
+    }
+
+    // TODO: Confirm Ctrl+Enter behavior across terminals; keep fallbacks until verified.
+    if (key.code == KeyCode::Enter && key.modifiers.contains(KeyModifiers::CONTROL))
+        || (key.code == KeyCode::Char('m') && key.modifiers.contains(KeyModifiers::CONTROL))
+        || key.code == KeyCode::F(5)
+    {
+        app.request_translate();
+        return;
+    }
+
+    if key.code == KeyCode::Char('r') && key.modifiers.contains(KeyModifiers::CONTROL) {
+        app.swap_languages();
+        return;
+    }
+
+    if key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::CONTROL) {
+        app.clear_input();
+        return;
+    }
+
+    if key.code == KeyCode::Char('s') && key.modifiers.contains(KeyModifiers::CONTROL) {
+        app.begin_language_edit(LangTarget::Source);
+        return;
+    }
+
+    if key.code == KeyCode::Char('t') && key.modifiers.contains(KeyModifiers::CONTROL) {
+        app.begin_language_edit(LangTarget::Target);
+        return;
+    }
+
+    if key.code == KeyCode::Tab {
+        app.toggle_focus();
+        return;
+    }
+
+    match key.code {
+        KeyCode::Enter => match app.focus {
+            Focus::Input => app.insert_char('\n'),
+            Focus::Output => app.request_translate(),
+        },
+        KeyCode::Backspace => app.backspace(),
+        KeyCode::Delete => app.delete(),
+        KeyCode::Left => app.move_left(),
+        KeyCode::Right => app.move_right(),
+        KeyCode::Up => match app.focus {
+            Focus::Input => app.move_up(),
+            Focus::Output => app.scroll_output(-1),
+        },
+        KeyCode::Down => match app.focus {
+            Focus::Input => app.move_down(),
+            Focus::Output => app.scroll_output(1),
+        },
+        KeyCode::Home => app.move_home(),
+        KeyCode::End => app.move_end(),
+        KeyCode::PageUp => match app.focus {
+            Focus::Input => app.scroll_input(-3),
+            Focus::Output => app.scroll_output(-3),
+        },
+        KeyCode::PageDown => match app.focus {
+            Focus::Input => app.scroll_input(3),
+            Focus::Output => app.scroll_output(3),
+        },
+        KeyCode::Char(ch) => {
+            if is_text_input(&key) {
+                app.insert_char(ch);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn handle_language_edit_key(app: &mut App, key: KeyEvent) {
+    if key.code == KeyCode::Esc {
+        app.cancel_language_edit();
+        return;
+    }
+
+    if key.code == KeyCode::Enter {
+        app.submit_language_edit();
+        return;
+    }
+
+    match key.code {
+        KeyCode::Backspace => app.backspace(),
+        KeyCode::Delete => app.delete(),
+        KeyCode::Left => app.move_left(),
+        KeyCode::Right => app.move_right(),
+        KeyCode::Home => app.move_home(),
+        KeyCode::End => app.move_end(),
+        KeyCode::Char(ch) => {
+            if is_text_input(&key) {
+                app.insert_char(ch);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn is_text_input(key: &KeyEvent) -> bool {
+    !key.modifiers.contains(KeyModifiers::CONTROL) && !key.modifiers.contains(KeyModifiers::ALT)
 }
 
 struct TerminalGuard {
