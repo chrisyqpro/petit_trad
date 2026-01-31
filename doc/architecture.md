@@ -184,8 +184,8 @@ pub struct Config {
 ### Model Format
 
 - Primary: **GGUF** (llama.cpp native format)
-- Default model: **TranslateGemma 12B Q4_K_M** (~7GB)
-- Quantization options: Q4_K_M (default), Q5_K_M, Q8_0 for higher quality
+- Default model (config): **TranslateGemma 12B Q8_0** (local default)
+- Quantization options: Q4_K_M (recommended), Q5_K_M, Q8_0 (higher quality, larger)
 - For 16GB VRAM: 12B Q4_K_M or 4B Q8_0
 - For 64GB+ VRAM: 27B Q4_K_M or Q5_K_M
 
