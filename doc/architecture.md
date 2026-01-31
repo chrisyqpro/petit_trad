@@ -152,6 +152,8 @@ pub struct Config {
     pub gpu_layers: u32,        // Layers to offload to GPU (0 = CPU)
     pub context_size: u32,      // Model context window
     pub threads: u32,           // CPU threads for inference
+    pub log_to_file: bool,      // Write llama.cpp logs to a file
+    pub log_path: PathBuf,      // Log file path (if enabled)
 }
 ```
 

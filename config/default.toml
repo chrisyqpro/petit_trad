@@ -2,8 +2,8 @@
 
 [model]
 # Path to the GGUF model file
-# Options: translate-gemma-4b, translate-gemma-12b (default), translate-gemma-27b
-path = "models/translate-gemma-12b-q4_k_m.gguf"
+# Options: translategemma-4b-it, translategemma-12b-it (default), translategemma-27b-it
+path = "models/translategemma-12b-it-GGUF/translategemma-12b-it.Q8_0.gguf"
 
 # Number of layers to offload to GPU (999 = all, 0 = CPU only)
 gpu_layers = 999
@@ -13,6 +13,12 @@ context_size = 2048
 
 # CPU threads for inference
 threads = 4
+
+# Redirect llama.cpp logs to a file (off by default to keep the TUI clean)
+log_to_file = true
+
+# Log file path when log_to_file is true
+log_path = "logs/llama.log"
 
 [translation]
 # Default source language (ISO 639-1)

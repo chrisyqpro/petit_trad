@@ -32,8 +32,8 @@ translation quality before implementing the Rust inference backend.
 Models
 
 By default the project expects a GGUF model in `models/`.
-Default (recommended for 16GB VRAM): `translate-gemma-12b-q4_k_m.gguf`.
-Alternative sizes: `translate-gemma-4b-*` and `translate-gemma-27b-*`.
+Default (local): `translategemma-12b-it.Q8_0.gguf`.
+Alternative sizes: `translategemma-4b-it.*` and `translategemma-27b-it.*`.
 
 Docs and agent files
 

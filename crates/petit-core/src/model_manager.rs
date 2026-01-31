@@ -9,7 +9,13 @@ use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::token::data_array::LlamaTokenDataArray;
+use std::ffi::CStr;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::num::NonZeroU32;
+use std::os::raw::c_char;
+use std::path::Path;
+use std::sync::{Mutex, OnceLock};
 
 /// Manages model loading and inference via llama.cpp
 pub struct ModelManager {
@@ -17,6 +23,8 @@ pub struct ModelManager {
     backend: LlamaBackend,
     config: Config,
 }
+
+static LOG_FILE: OnceLock<Mutex<std::fs::File>> = OnceLock::new();
 
 impl ModelManager {
     /// Create a new ModelManager by loading a GGUF model
@@ -30,8 +38,9 @@ impl ModelManager {
         }
 
         // Initialize backend
-        let backend =
+        let mut backend =
             LlamaBackend::init().map_err(|e| Error::ModelLoad(format!("Backend init: {e}")))?;
+        configure_logging(&config, &mut backend)?;
 
         // Set up model parameters
         let model_params = LlamaModelParams::default().with_n_gpu_layers(config.gpu_layers);
@@ -131,4 +140,53 @@ impl ModelManager {
     pub fn config(&self) -> &Config {
         &self.config
     }
+}
+
+fn configure_logging(config: &Config, backend: &mut LlamaBackend) -> Result<()> {
+    if config.log_to_file {
+        init_log_file(&config.log_path)?;
+        unsafe {
+            llama_cpp_sys_2::llama_log_set(Some(log_callback), std::ptr::null_mut());
+            llama_cpp_sys_2::ggml_log_set(Some(log_callback), std::ptr::null_mut());
+        }
+    } else {
+        backend.void_logs();
+    }
+    Ok(())
+}
+
+fn init_log_file(path: &Path) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| Error::ModelLoad(format!("Log dir create: {e}")))?;
+    }
+
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|e| Error::ModelLoad(format!("Log file open: {e}")))?;
+
+    let _ = LOG_FILE.set(Mutex::new(file));
+    Ok(())
+}
+
+unsafe extern "C" fn log_callback(
+    _level: llama_cpp_sys_2::ggml_log_level,
+    text: *const c_char,
+    _user_data: *mut ::std::os::raw::c_void,
+) {
+    if text.is_null() {
+        return;
+    }
+    let file_lock = match LOG_FILE.get() {
+        Some(lock) => lock,
+        None => return,
+    };
+    let mut file = match file_lock.lock() {
+        Ok(file) => file,
+        Err(_) => return,
+    };
+    let message = CStr::from_ptr(text).to_bytes();
+    let _ = file.write_all(message);
 }

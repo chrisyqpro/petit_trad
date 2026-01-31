@@ -22,6 +22,14 @@ pub struct Config {
     /// Number of threads for CPU inference
     #[serde(default = "default_threads")]
     pub threads: u32,
+
+    /// Write llama.cpp logs to a file instead of stderr
+    #[serde(default = "default_log_to_file")]
+    pub log_to_file: bool,
+
+    /// Path to the log file when log_to_file is enabled
+    #[serde(default = "default_log_path")]
+    pub log_path: PathBuf,
 }
 
 fn default_gpu_layers() -> u32 {
@@ -36,13 +44,25 @@ fn default_threads() -> u32 {
     4
 }
 
+fn default_log_to_file() -> bool {
+    false
+}
+
+fn default_log_path() -> PathBuf {
+    PathBuf::from("logs/llama.log")
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
-            model_path: PathBuf::from("models/translate-gemma-12b-q4_k_m.gguf"),
+            model_path: PathBuf::from(
+                "models/translategemma-12b-it-GGUF/translategemma-12b-it.Q8_0.gguf",
+            ),
             gpu_layers: default_gpu_layers(),
             context_size: default_context_size(),
             threads: default_threads(),
+            log_to_file: default_log_to_file(),
+            log_path: default_log_path(),
         }
     }
 }
@@ -76,10 +96,15 @@ mod tests {
     #[test]
     fn test_default_values() {
         let config = Config::default();
-        assert_eq!(config.model_path, PathBuf::from("models/translate-gemma-12b-q4_k_m.gguf"));
+        assert_eq!(
+            config.model_path,
+            PathBuf::from("models/translategemma-12b-it-GGUF/translategemma-12b-it.Q8_0.gguf")
+        );
         assert_eq!(config.gpu_layers, 999);
         assert_eq!(config.context_size, 2048);
         assert_eq!(config.threads, 4);
+        assert!(!config.log_to_file);
+        assert_eq!(config.log_path, PathBuf::from("logs/llama.log"));
     }
 
     #[test]
@@ -89,6 +114,8 @@ mod tests {
             gpu_layers: 32,
             context_size: 4096,
             threads: 8,
+            log_to_file: true,
+            log_path: PathBuf::from("/tmp/llama.log"),
         };
 
         let toml_str = config.to_toml().expect("serialize should succeed");
@@ -109,22 +136,31 @@ model_path = "my-model.gguf"
         assert_eq!(config.gpu_layers, 999);
         assert_eq!(config.context_size, 2048);
         assert_eq!(config.threads, 4);
+        assert!(!config.log_to_file);
+        assert_eq!(config.log_path, PathBuf::from("logs/llama.log"));
     }
 
     #[test]
     fn test_parse_full_toml() {
         let toml_str = r#"
-model_path = "/models/translate-gemma-27b.gguf"
+model_path = "/models/translategemma-27b-it.gguf"
 gpu_layers = 64
 context_size = 8192
 threads = 16
+log_to_file = true
+log_path = "/var/log/petit/llama.log"
 "#;
         let config = Config::from_toml(toml_str).expect("parse should succeed");
 
-        assert_eq!(config.model_path, PathBuf::from("/models/translate-gemma-27b.gguf"));
+        assert_eq!(
+            config.model_path,
+            PathBuf::from("/models/translategemma-27b-it.gguf")
+        );
         assert_eq!(config.gpu_layers, 64);
         assert_eq!(config.context_size, 8192);
         assert_eq!(config.threads, 16);
+        assert!(config.log_to_file);
+        assert_eq!(config.log_path, PathBuf::from("/var/log/petit/llama.log"));
     }
 
     #[test]
@@ -140,4 +176,3 @@ threads = 16
         assert!(result.is_err());
     }
 }
-

@@ -37,6 +37,8 @@ fn run() -> Result<()> {
         gpu_layers,
         context_size,
         threads,
+        log_to_file: false,
+        log_path: PathBuf::from("logs/llama.log"),
     };
 
     let translator = GemmaTranslator::new(config)?;

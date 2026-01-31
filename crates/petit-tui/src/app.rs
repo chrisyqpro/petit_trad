@@ -43,6 +43,12 @@ pub enum LangTarget {
     Target,
 }
 
+pub struct TranslationRequest {
+    pub text: String,
+    pub source_lang: String,
+    pub target_lang: String,
+}
+
 struct LangEdit {
     target: LangTarget,
     buffer: String,
@@ -69,8 +75,12 @@ impl Default for App {
 }
 
 impl App {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn with_languages(source_lang: String, target_lang: String) -> Self {
+        Self {
+            source_lang,
+            target_lang,
+            ..Self::default()
+        }
     }
 
     pub fn is_editing_language(&self) -> bool {
@@ -264,8 +274,39 @@ impl App {
         self.output_scroll = scroll_value(self.output_scroll, delta, max);
     }
 
-    pub fn request_translate(&mut self) {
-        self.status_message = Some("Translation not wired yet".to_string());
+    pub fn begin_translation(&mut self) -> Option<TranslationRequest> {
+        if self.is_loading {
+            self.status_message = Some("Translation already in progress".to_string());
+            return None;
+        }
+        let trimmed = self.input.trim();
+        if trimmed.is_empty() {
+            self.status_message = Some("Input is empty".to_string());
+            return None;
+        }
+
+        self.is_loading = true;
+        self.status_message = Some("Translating...".to_string());
+
+        Some(TranslationRequest {
+            text: self.input.clone(),
+            source_lang: self.source_lang.clone(),
+            target_lang: self.target_lang.clone(),
+        })
+    }
+
+    pub fn apply_translation_result(&mut self, result: Result<String, String>) {
+        self.is_loading = false;
+        match result {
+            Ok(text) => {
+                self.output = text;
+                self.output_scroll = 0;
+                self.status_message = Some("Translation complete".to_string());
+            }
+            Err(err) => {
+                self.status_message = Some(err);
+            }
+        }
     }
 
     fn edit_active_buffer<F>(&mut self, mut update: F)

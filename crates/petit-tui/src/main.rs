@@ -6,28 +6,75 @@
 
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::execute;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
+use petit_core::{Config, GemmaTranslator, Translator};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
-use std::io::{self, Stdout, Write};
+use std::io::{self, Read, Stdout, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
+use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::app::{App, Focus, LangTarget};
+use crate::app::{App, Focus, LangTarget, TranslationRequest};
+use crate::cli::CliArgs;
+use crate::config::{load_config, AppConfig};
 
 mod app;
+mod cli;
+mod config;
 mod ui;
 
 fn main() -> Result<()> {
+    if let Err(err) = run() {
+        eprintln!("Error: {err}");
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+fn run() -> Result<()> {
+    let cli = CliArgs::parse()?;
+    if cli.show_help {
+        println!("{}", CliArgs::usage());
+        return Ok(());
+    }
+    if cli.show_version {
+        println!("petit {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
+    let app_config = load_config(&cli)?;
+    let _compact_lang_display = app_config.compact_lang_display;
+    if app_config.stdin_mode {
+        return run_stdin(app_config);
+    }
+
     let (mut terminal, guard) = setup_terminal()?;
     guard.install_panic_hook();
 
-    let mut app = App::new();
-    let result = run_app(&mut terminal, &mut app);
+    let mut app = App::with_languages(app_config.source_lang, app_config.target_lang);
+    let (tx, rx, worker) = start_translation_worker(app_config.core);
+    let result = run_app(&mut terminal, &mut app, &tx, &rx);
+    drop(tx);
+    let _ = worker.join();
 
     result
+}
+
+fn run_stdin(config: AppConfig) -> Result<()> {
+    let mut input = String::new();
+    io::stdin().read_to_string(&mut input)?;
+    if input.trim().is_empty() {
+        return Err(anyhow::anyhow!("stdin is empty"));
+    }
+
+    let translator = GemmaTranslator::new(config.core)?;
+    let output = translator.translate(&input, &config.source_lang, &config.target_lang)?;
+    println!("{output}");
+    Ok(())
 }
 
 fn setup_terminal() -> Result<(Terminal<CrosstermBackend<Stdout>>, TerminalGuard)> {
@@ -38,7 +85,12 @@ fn setup_terminal() -> Result<(Terminal<CrosstermBackend<Stdout>>, TerminalGuard
     Ok((terminal, guard))
 }
 
-fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> Result<()> {
+fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    app: &mut App,
+    tx: &Sender<TranslationRequest>,
+    rx: &Receiver<TranslationResponse>,
+) -> Result<()> {
     let tick_rate = Duration::from_millis(200);
     let mut last_tick = Instant::now();
 
@@ -48,10 +100,14 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
         let timeout = tick_rate.saturating_sub(last_tick.elapsed());
         if event::poll(timeout)? {
             match event::read()? {
-                Event::Key(key) => handle_key_event(app, key),
+                Event::Key(key) => handle_key_event(app, key, tx),
                 Event::Paste(text) => app.insert_str(&text),
                 _ => {}
             }
+        }
+
+        while let Ok(response) = rx.try_recv() {
+            app.apply_translation_result(response.into_result());
         }
 
         if app.should_quit {
@@ -66,7 +122,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
     Ok(())
 }
 
-fn handle_key_event(app: &mut App, key: KeyEvent) {
+fn handle_key_event(app: &mut App, key: KeyEvent, tx: &Sender<TranslationRequest>) {
     if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
         app.should_quit = true;
         return;
@@ -82,7 +138,7 @@ fn handle_key_event(app: &mut App, key: KeyEvent) {
         || (key.code == KeyCode::Char('m') && key.modifiers.contains(KeyModifiers::CONTROL))
         || key.code == KeyCode::F(5)
     {
-        app.request_translate();
+        request_translation(app, tx);
         return;
     }
 
@@ -114,7 +170,7 @@ fn handle_key_event(app: &mut App, key: KeyEvent) {
     match key.code {
         KeyCode::Enter => match app.focus {
             Focus::Input => app.insert_char('\n'),
-            Focus::Output => app.request_translate(),
+            Focus::Output => request_translation(app, tx),
         },
         KeyCode::Backspace => app.backspace(),
         KeyCode::Delete => app.delete(),
@@ -176,6 +232,67 @@ fn handle_language_edit_key(app: &mut App, key: KeyEvent) {
 
 fn is_text_input(key: &KeyEvent) -> bool {
     !key.modifiers.contains(KeyModifiers::CONTROL) && !key.modifiers.contains(KeyModifiers::ALT)
+}
+
+fn request_translation(app: &mut App, tx: &Sender<TranslationRequest>) {
+    let request = match app.begin_translation() {
+        Some(request) => request,
+        None => return,
+    };
+
+    if tx.send(request).is_err() {
+        app.apply_translation_result(Err("Translation worker unavailable".to_string()));
+    }
+}
+
+fn start_translation_worker(config: Config) -> (
+    Sender<TranslationRequest>,
+    Receiver<TranslationResponse>,
+    thread::JoinHandle<()>,
+) {
+    let (request_tx, request_rx) = mpsc::channel::<TranslationRequest>();
+    let (response_tx, response_rx) = mpsc::channel::<TranslationResponse>();
+
+    let worker = thread::spawn(move || {
+        let mut translator: Option<GemmaTranslator> = None;
+        for request in request_rx {
+            if translator.is_none() {
+                match GemmaTranslator::new(config.clone()) {
+                    Ok(instance) => translator = Some(instance),
+                    Err(err) => {
+                        let _ = response_tx.send(TranslationResponse::Err(err.to_string()));
+                        continue;
+                    }
+                }
+            }
+
+            let response = match translator.as_ref() {
+                Some(instance) => instance
+                    .translate(&request.text, &request.source_lang, &request.target_lang)
+                    .map(TranslationResponse::Ok)
+                    .unwrap_or_else(|err| TranslationResponse::Err(err.to_string())),
+                None => TranslationResponse::Err("Translator unavailable".to_string()),
+            };
+
+            let _ = response_tx.send(response);
+        }
+    });
+
+    (request_tx, response_rx, worker)
+}
+
+enum TranslationResponse {
+    Ok(String),
+    Err(String),
+}
+
+impl TranslationResponse {
+    fn into_result(self) -> Result<String, String> {
+        match self {
+            TranslationResponse::Ok(text) => Ok(text),
+            TranslationResponse::Err(err) => Err(err),
+        }
+    }
 }
 
 struct TerminalGuard {
