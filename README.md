@@ -32,6 +32,13 @@ GPU support is enabled at build time via Cargo features:
 - Vulkan (Linux AMD): `cargo run -p petit-tui --features vulkan`
 - CPU-only: omit GPU features or use `--features cpu-only`
 
+WSL CUDA environment (required when building llama-cpp-2 with CUDA):
+
+```bash
+export CUDACXX=/usr/local/cuda/bin/nvcc
+export CUDAToolkit_ROOT=/usr/local/cuda
+```
+
 Python prototype
 
 A Python prototype is provided under `proto/` with dependencies listed in
