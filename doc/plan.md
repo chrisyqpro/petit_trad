@@ -154,7 +154,7 @@ Phase 3E: CLI + config + stdin
 ### Phase 4: Cross-Platform Build & CI
 
 - [x] **T4.1** Configure Cargo features: `cuda`, `metal`, `vulkan`, `cpu-only`
-- [ ] **T4.2** Test build on WSL with CUDA (first)
+- [x] **T4.2** Test build on WSL with CUDA (first)
 - [ ] **T4.3** Test build on macOS (Metal backend) (second)
 - [ ] **T4.4** Set up GitHub Actions CI (third)
 - [ ] **T4.5** Create release workflow with pre-built binaries (fourth)
@@ -189,6 +189,13 @@ Phase 4E: Release workflow (fourth)
 
 Phase 4F: Deferred platforms
 - Native Linux GPU and native Windows GPU testing deferred until after CI/release setup.
+
+Notes:
+- 2026-02-02: WSL CUDA build succeeded with `CUDACXX=/usr/local/cuda/bin/nvcc` and
+  `CUDAToolkit_ROOT=/usr/local/cuda`. Command:
+  `cargo run -p petit-tui --features cuda -- --stdin`, input "Hello, how are you?",
+  output "Bonjour, comment allez-vous ?". Build took ~10 minutes. Logs written to
+  `logs/llama.log` with `PETIT_TRAD_LOG_TO_FILE=1`.
 
 ### Phase 5: Polish & Documentation
 
@@ -305,4 +312,4 @@ Phase 4F: Deferred platforms
 
 ---
 
-*Last updated: 2026-01-31*
+*Last updated: 2026-02-02*
