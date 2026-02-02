@@ -153,7 +153,7 @@ Phase 3E: CLI + config + stdin
 
 ### Phase 4: Cross-Platform Build & CI
 
-- [ ] **T4.1** Configure Cargo features: `cuda`, `metal`, `vulkan`, `cpu-only`
+- [x] **T4.1** Configure Cargo features: `cuda`, `metal`, `vulkan`, `cpu-only`
 - [ ] **T4.2** Test build on WSL with CUDA (first)
 - [ ] **T4.3** Test build on macOS (Metal backend) (second)
 - [ ] **T4.4** Set up GitHub Actions CI (third)

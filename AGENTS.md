@@ -26,7 +26,7 @@ doc/                 # Permanent documentation
 ## Rules
 
 1. **Read `doc/architecture.md`** before making structural changes
-2. **Update `.agent/plan.md`** when completing tasks, copy from `doc` folder if the file doesn't exist
+2. **Update `.agent/plan.md`** when completing tasks. Copy from `doc` folder if the file doesn't exist in .agent folder
 3. **No cloud APIs** — We run TranslateGemma locally via llama-cpp-2
 4. **Cross-platform** — Must work on WSL, Linux, macOS, Windows
 5. **Markdown line length** — Keep lines ≤120 characters in git-tracked `doc/` Markdown files

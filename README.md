@@ -23,6 +23,15 @@ cargo check
 cargo run -p petit-tui --release
 ```
 
+GPU backends
+
+GPU support is enabled at build time via Cargo features:
+
+- CUDA (WSL/Linux NVIDIA): `cargo run -p petit-tui --features cuda`
+- Metal (macOS Apple Silicon): `cargo run -p petit-tui --features metal`
+- Vulkan (Linux AMD): `cargo run -p petit-tui --features vulkan`
+- CPU-only: omit GPU features or use `--features cpu-only`
+
 Python prototype
 
 A Python prototype is provided under `proto/` with dependencies listed in
