@@ -178,6 +178,18 @@ Phase 4C: macOS Metal validation (second)
 - Confirm model loads, translation succeeds, and UI stays intact.
 - Record toolchain/Xcode requirements if needed.
 
+Summary (handoff to macOS agent)
+- Goal: validate Metal build/runtime on Apple Silicon with the current TUI.
+- Expected commands: `cargo run -p petit-tui --features metal` and a stdin test.
+- Record any required macOS/Xcode/SDK versions and any extra env vars.
+
+Checklist (macOS Metal)
+- [ ] Ensure Xcode/Command Line Tools installed and `xcode-select` configured.
+- [ ] `cargo run -p petit-tui --features metal` builds successfully.
+- [ ] Run a translation via stdin: `echo "Hello" | cargo run -p petit-tui --features metal -- --stdin`.
+- [ ] Confirm translation output and that UI remains intact.
+- [ ] Note any warnings, required flags, or performance quirks in this plan file.
+
 Phase 4D: GitHub Actions CI (third)
 - Add CI workflow for Linux and macOS CPU builds/tests.
 - Cache Cargo and llama.cpp artifacts where possible.
