@@ -1,65 +1,73 @@
-petit_trad
-===========
+# petit_trad
 
-A local translation tool that runs Google's TranslateGemma models locally.
+Local translation tool using TranslateGemma models via local llama.cpp bindings.
 
-Goals
-- Run TranslateGemma locally (4B / 12B / 27B) without cloud APIs.
-- Terminal-first UX (TUI) with future GUI planned.
-- Cross-platform support: WSL (primary dev), Linux, macOS, Windows.
+## Goals
 
-Quick start (development)
+- Run TranslateGemma locally (4B / 12B / 27B) without cloud APIs
+- Provide a terminal-first UX (TUI), with future GUI expansion
+- Support WSL, Linux, macOS, and Windows
 
-1. Install Rust and Cargo.
-2. Build workspace:
+## Quick Start
+
+1. Install Rust (stable) and Cargo.
+2. Validate the workspace:
 
 ```bash
 cargo check
+cargo test --workspace
 ```
 
-3. Run the TUI (placeholder binary until UI is implemented):
+3. Run the TUI:
 
 ```bash
-cargo run -p petit-tui --release
+cargo run -p petit-tui
 ```
 
-GPU backends
+4. One-shot stdin mode:
 
-GPU support is enabled at build time via Cargo features:
+```bash
+echo "Hello, how are you?" | cargo run -p petit-tui -- --stdin --target-lang fr
+```
+
+## GPU Backends
+
+Enable backend features at build/run time:
 
 - CUDA (WSL/Linux NVIDIA): `cargo run -p petit-tui --features cuda`
 - Metal (macOS Apple Silicon): `cargo run -p petit-tui --features metal`
 - Vulkan (Linux AMD): `cargo run -p petit-tui --features vulkan`
 - CPU-only: omit GPU features or use `--features cpu-only`
 
-WSL CUDA environment (required when building llama-cpp-2 with CUDA):
+WSL CUDA builds often require:
 
 ```bash
 export CUDACXX=/usr/local/cuda/bin/nvcc
 export CUDAToolkit_ROOT=/usr/local/cuda
 ```
 
-Python prototype
+## Model Files
 
-A Python prototype is provided under `proto/` with dependencies listed in
-`proto/requirements.txt`. Use it to validate TranslateGemma prompt format and
-translation quality before implementing the Rust inference backend.
+Models are not checked into git. By default, config expects:
 
-Models
+- `models/translategemma-12b-it-GGUF/translategemma-12b-it.Q8_0.gguf`
 
-By default the project expects a GGUF model in `models/`.
-Default (local): `translategemma-12b-it.Q8_0.gguf`.
-Alternative sizes: `translategemma-4b-it.*` and `translategemma-27b-it.*`.
+Override with CLI (`--model`), env vars, or config.
 
-Docs and agent files
+## Repository Organization
 
-- Permanent docs: `doc/`
-- Agent runtime files and session data (git-ignored): `.agent/`
+- `AGENTS.md`: AI agents instructions
+- `ARCHITECTURE.md`: fast architectural map and invariants
+- `crates/petit-core/`: translation engine library
+- `crates/petit-tui/`: terminal UI binary (`petit`)
+- `proto/`: Python prototype and experiments
+- `docs/`: durable project documentation root
+- `docs/PLANS.md`: execution-plan requirements and conventions
+- `docs/BUILD.md`: project build guide
+- `docs/design-docs/`: technical architecture and prompt docs
+- `docs/product-specs/`: product scope and requirement docs
+- `docs/execution-plans/`: active/completed execution plans and tracker
 
-Contributing
+## License
 
-See `doc/architecture.md` and `.agent/plan.md` for design and current plan.
-
-License
-
-This project is licensed under GPLv3. See `LICENSE` for details.
+GPL-3.0-or-later. See `LICENSE`.
