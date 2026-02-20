@@ -12,7 +12,8 @@ After this work, `petit-core` no longer depends on a deprecated llama.cpp token
 conversion API, and `petit-tui` has an explicit, test-backed translation
 shortcut policy that can be validated across terminals. The visible effect is a
 cleaner build signal and predictable translation triggering when users press
-`Ctrl+Enter` or fallback keys.
+`Ctrl+Enter` or fallback keys. This task also aligns workspace manifests with
+Rust edition 2024 where project metadata still targets 2021.
 
 ## Progress
 
@@ -26,6 +27,8 @@ cleaner build signal and predictable translation triggering when users press
       remove the unresolved TODO comment.
 - [ ] (2026-02-19 10:35Z) Run full validation commands and capture evidence in
       this document.
+- [ ] (2026-02-19 23:20Z) Align Cargo manifest edition settings from 2021 to
+  2024 and validate workspace build/tests after the change.
 
 ## Surprises & Discoveries
 
@@ -64,6 +67,12 @@ In progress. On completion, summarize:
 
 This task is a maintenance cleanup with two independent changes.
 
+An additional repository consistency item is now in scope: Rust edition
+alignment. Current project context indicates edition 2024 should be used, while
+some manifests may still specify or inherit 2021. This work must update the
+edition settings in relevant Cargo manifests and verify no behavioral regression
+in build or tests.
+
 The first change is in `crates/petit-core/src/model_manager.rs`, inside
 `ModelManager::infer`. The file currently converts generated tokens to text with
 `LlamaModel::token_to_str`, which is deprecated in the installed `llama_cpp_2`
@@ -99,6 +108,13 @@ Milestone 4 runs validation commands, records concise output snippets in this
 plan, and updates `Progress`, `Surprises & Discoveries`, `Decision Log`, and
 `Outcomes & Retrospective` so the plan remains restartable for a novice.
 
+Milestone 5 aligns Rust edition metadata in Cargo manifests to 2024. Check
+workspace root and crate manifests (`Cargo.toml` at repository root,
+`crates/petit-core/Cargo.toml`, and `crates/petit-tui/Cargo.toml`) for direct
+or workspace-inherited edition values that still resolve to 2021. Apply the
+smallest consistent update so all crates build under edition 2024, then rerun
+validation commands.
+
 ## Concrete Steps
 
 Run from repository root:
@@ -114,6 +130,12 @@ After Milestone 1 and 2 edits:
 
     RUSTFLAGS="-D warnings" cargo check
     cargo test --workspace
+
+  Edition alignment checks:
+
+    rg -n "edition" Cargo.toml crates/*/Cargo.toml
+    cargo metadata --format-version 1 > /tmp/petit-cargo-metadata.json
+    rg -n '"edition":"2024"' /tmp/petit-cargo-metadata.json
 
 Plan-completion sanity checks:
 
@@ -140,6 +162,7 @@ Accept this task as complete when all conditions below are true:
 - Automated tests cover shortcut matching for positive and negative cases.
 - Manual TUI run confirms translation can be triggered with primary and fallback
   shortcuts.
+- Cargo manifests and resolved workspace metadata reflect Rust edition 2024.
 
 ## Idempotence and Recovery
 
@@ -176,3 +199,5 @@ module boundaries.
 
 - 2026-02-19: Created this plan to execute the previously identified "task 4"
   cleanup (deprecation removal and terminal shortcut confirmation).
+- 2026-02-19: Expanded task scope to include Rust edition alignment from 2021
+  to 2024, with manifest and validation requirements.
