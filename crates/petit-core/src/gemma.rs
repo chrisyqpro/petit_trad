@@ -44,9 +44,7 @@ impl GemmaTranslator {
     fn build_prompt(&self, text: &str, source_lang: &str, target_lang: &str) -> String {
         let src = normalize_lang(source_lang);
         let tgt = normalize_lang(target_lang);
-        format!(
-            "<start_of_turn>user\n[{src}->{tgt}] {text}<end_of_turn>\n<start_of_turn>model\n"
-        )
+        format!("<start_of_turn>user\n[{src}->{tgt}] {text}<end_of_turn>\n<start_of_turn>model\n")
     }
 
     /// Clean the model output by stripping whitespace and any echo artifacts

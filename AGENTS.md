@@ -22,5 +22,5 @@
 8. Always check and format before commit
 9. Commit message should strictly follow conventional commits format. Line length: title (first line) 50, body 72.
    In title, only use one word for scope. (e.g. plan instead of execute-plan). In body, use list (if more than one change)
-   to explain what are changed and why (each in natural human sentence).
+   to explain what are changed and why (each in natural human sentence). No unnecessary empty line.
 10. Never skip git signature and commit message for tag, merge and so on.

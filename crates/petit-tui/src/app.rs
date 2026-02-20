@@ -78,7 +78,11 @@ impl Default for App {
 }
 
 impl App {
-    pub fn with_languages(source_lang: String, target_lang: String, compact_lang_display: bool) -> Self {
+    pub fn with_languages(
+        source_lang: String,
+        target_lang: String,
+        compact_lang_display: bool,
+    ) -> Self {
         Self {
             source_lang,
             target_lang,
