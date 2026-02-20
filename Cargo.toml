@@ -7,7 +7,7 @@ members = [
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/chrisyqpro/petit_trad"
 
@@ -17,6 +17,7 @@ thiserror = "1.0"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
+encoding_rs = "0.8"
 
 # Inference
 llama-cpp-2 = "0.1.132"

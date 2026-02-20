@@ -6,8 +6,8 @@ use crate::{Config, Error, Result};
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
-use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaModel;
+use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::token::data_array::LlamaTokenDataArray;
 use std::ffi::CStr;
 use std::fs::{self, OpenOptions};
@@ -120,10 +120,11 @@ impl ModelManager {
 
         // Convert tokens to string
         let mut output = String::new();
+        let mut decoder = encoding_rs::UTF_8.new_decoder();
         for token in output_tokens {
             let piece = self
                 .model
-                .token_to_str(token, llama_cpp_2::model::Special::Tokenize)
+                .token_to_piece(token, &mut decoder, true, None)
                 .map_err(|e| Error::Inference(format!("Detokenization: {e}")))?;
             output.push_str(&piece);
         }
@@ -157,8 +158,7 @@ fn configure_logging(config: &Config, backend: &mut LlamaBackend) -> Result<()> 
 
 fn init_log_file(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| Error::ModelLoad(format!("Log dir create: {e}")))?;
+        fs::create_dir_all(parent).map_err(|e| Error::ModelLoad(format!("Log dir create: {e}")))?;
     }
 
     let file = OpenOptions::new()
@@ -187,6 +187,8 @@ unsafe extern "C" fn log_callback(
         Ok(file) => file,
         Err(_) => return,
     };
-    let message = CStr::from_ptr(text).to_bytes();
+    // SAFETY: `text` is provided by llama.cpp for the duration of this callback and
+    // was checked for null above.
+    let message = unsafe { CStr::from_ptr(text) }.to_bytes();
     let _ = file.write_all(message);
 }

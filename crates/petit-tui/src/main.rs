@@ -7,20 +7,22 @@
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::execute;
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
 use petit_core::{Config, GemmaTranslator, Translator};
-use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 use std::io::{self, Read, Stdout, Write};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::app::{App, Focus, LangTarget, TranslationRequest};
 use crate::cli::CliArgs;
-use crate::config::{load_config, AppConfig};
+use crate::config::{AppConfig, load_config};
 
 mod app;
 mod cli;
@@ -137,11 +139,7 @@ fn handle_key_event(app: &mut App, key: KeyEvent, tx: &Sender<TranslationRequest
         return;
     }
 
-    // TODO: Confirm Ctrl+Enter behavior across terminals; keep fallbacks until verified.
-    if (key.code == KeyCode::Enter && key.modifiers.contains(KeyModifiers::CONTROL))
-        || (key.code == KeyCode::Char('m') && key.modifiers.contains(KeyModifiers::CONTROL))
-        || key.code == KeyCode::F(5)
-    {
+    if is_translate_shortcut(&key) {
         request_translation(app, tx);
         return;
     }
@@ -172,10 +170,6 @@ fn handle_key_event(app: &mut App, key: KeyEvent, tx: &Sender<TranslationRequest
     }
 
     match key.code {
-        KeyCode::Enter => match app.focus {
-            Focus::Input => app.insert_char('\n'),
-            Focus::Output => request_translation(app, tx),
-        },
         KeyCode::Backspace => app.backspace(),
         KeyCode::Delete => app.delete(),
         KeyCode::Left => app.move_left(),
@@ -238,6 +232,10 @@ fn is_text_input(key: &KeyEvent) -> bool {
     !key.modifiers.contains(KeyModifiers::CONTROL) && !key.modifiers.contains(KeyModifiers::ALT)
 }
 
+fn is_translate_shortcut(key: &KeyEvent) -> bool {
+    key.code == KeyCode::Enter
+}
+
 fn request_translation(app: &mut App, tx: &Sender<TranslationRequest>) {
     let request = match app.begin_translation() {
         Some(request) => request,
@@ -249,7 +247,9 @@ fn request_translation(app: &mut App, tx: &Sender<TranslationRequest>) {
     }
 }
 
-fn start_translation_worker(config: Config) -> (
+fn start_translation_worker(
+    config: Config,
+) -> (
     Sender<TranslationRequest>,
     Receiver<TranslationResponse>,
     thread::JoinHandle<()>,
@@ -338,4 +338,37 @@ fn cleanup_terminal(cleaned: &AtomicBool) {
     let mut stdout = io::stdout();
     let _ = execute!(stdout, LeaveAlternateScreen);
     let _ = stdout.flush();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn translate_shortcuts_match_expected_keys() {
+        let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        let shift_enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT);
+        let ctrl_enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL);
+
+        assert!(is_translate_shortcut(&enter));
+        assert!(is_translate_shortcut(&shift_enter));
+        assert!(is_translate_shortcut(&ctrl_enter));
+    }
+
+    #[test]
+    fn non_shortcuts_do_not_trigger_translation() {
+        let char_a = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
+        let char_m = KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE);
+        let ctrl_m = KeyEvent::new(KeyCode::Char('m'), KeyModifiers::CONTROL);
+        let f5 = KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE);
+        let ctrl_r = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL);
+        let tab = KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE);
+
+        assert!(!is_translate_shortcut(&char_a));
+        assert!(!is_translate_shortcut(&char_m));
+        assert!(!is_translate_shortcut(&ctrl_m));
+        assert!(!is_translate_shortcut(&f5));
+        assert!(!is_translate_shortcut(&ctrl_r));
+        assert!(!is_translate_shortcut(&tab));
+    }
 }
