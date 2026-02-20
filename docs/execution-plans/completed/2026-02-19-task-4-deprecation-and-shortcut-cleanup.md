@@ -12,23 +12,23 @@ After this work, `petit-core` no longer depends on a deprecated llama.cpp token
 conversion API, and `petit-tui` has an explicit, test-backed translation
 shortcut policy that can be validated across terminals. The visible effect is a
 cleaner build signal and predictable translation triggering when users press
-`Ctrl+Enter` or fallback keys. This task also aligns workspace manifests with
+`Enter` to submit. This task also aligns workspace manifests with
 Rust edition 2024 where project metadata still targets 2021.
 
 ## Progress
 
 - [x] (2026-02-19 10:35Z) Created ExecPlan with scope, milestones, and
       validation strategy.
-- [ ] (2026-02-19 10:35Z) Replace deprecated token detokenization call in
-      `crates/petit-core/src/model_manager.rs` and confirm clean compile.
-- [ ] (2026-02-19 10:35Z) Refactor TUI translation shortcut matching into a
-      dedicated helper in `crates/petit-tui/src/main.rs`.
-- [ ] (2026-02-19 10:35Z) Add focused tests for shortcut matching behavior and
-      remove the unresolved TODO comment.
-- [ ] (2026-02-19 10:35Z) Run full validation commands and capture evidence in
-      this document.
-- [ ] (2026-02-19 23:20Z) Align Cargo manifest edition settings from 2021 to
-  2024 and validate workspace build/tests after the change.
+- [x] (2026-02-20 16:36Z) Replaced deprecated token detokenization call in
+      `crates/petit-core/src/model_manager.rs` and confirmed clean compile.
+- [x] (2026-02-20 16:36Z) Refactored TUI translation shortcut matching into
+      `is_translate_shortcut` in `crates/petit-tui/src/main.rs`.
+- [x] (2026-02-20 16:36Z) Added focused tests for shortcut matching behavior
+      and removed the unresolved TODO comment.
+- [x] (2026-02-20 16:36Z) Ran validation commands and captured evidence in this
+      document.
+- [x] (2026-02-20 16:36Z) Aligned Cargo manifest edition settings from 2021 to
+      2024 and validated workspace build/tests after the change.
 
 ## Surprises & Discoveries
 
@@ -41,6 +41,21 @@ Rust edition 2024 where project metadata still targets 2021.
 - Observation: The active TODO in `crates/petit-tui/src/main.rs:140` indicates
   key handling uncertainty for `Ctrl+Enter` across terminals.
   Evidence: Comment says to keep fallbacks until behavior is confirmed.
+
+- Observation: Moving the workspace from Rust edition 2021 to 2024 surfaced an
+  additional warning in existing callback code:
+  `unsafe_op_in_unsafe_fn` at `crates/petit-core/src/model_manager.rs:191`.
+  Evidence: `RUSTFLAGS="-D warnings" cargo check` failed until
+  `CStr::from_ptr` was wrapped in an explicit `unsafe` block.
+
+- Observation: Manual testing on macOS showed inconsistent Enter-based
+  shortcuts across terminals and tmux.
+  Evidence: Under tmux, only `F5` reliably triggered translation in Alacritty
+  and Ghostty. Outside tmux, `Ctrl+M` worked in Ghostty but not in Alacritty.
+
+- Observation: Common CLI UX for this workflow (Codex CLI and Copilot CLI)
+  submits on plain Enter and does not expose multiline input.
+  Evidence: User-tested behavior showed Enter submits in both tools.
 
 ## Decision Log
 
@@ -55,13 +70,46 @@ Rust edition 2024 where project metadata still targets 2021.
   Rationale: It proves the deprecation cleanup is real and prevents regression.
   Date/Author: 2026-02-19 / codex.
 
+- Decision: Add explicit shortcut fallback hints (`Ctrl+Enter/Ctrl+M/F5`) in
+  the footer text.
+  Rationale: It keeps user-visible guidance consistent with actual key handling.
+  Date/Author: 2026-02-20 / codex.
+
+- Decision: Add `Shift+Enter` as a translation shortcut while keeping plain
+  `Enter` as newline in input focus.
+  Rationale: It provides a simpler submit gesture and avoids Enter-encoding
+  ambiguity observed under tmux and across terminal emulators.
+  Date/Author: 2026-02-20 / codex.
+
+- Decision: Use plain `Enter` as the primary submit action and remove multiline
+  entry via Enter in TUI input focus.
+  Rationale: It aligns with common CLI translator ergonomics and avoids
+  cross-terminal modifier ambiguity for submission.
+  Date/Author: 2026-02-20 / codex.
+
+- Decision: Remove fallback translation keys (`Ctrl+M` and `F5`) and keep a
+  single submit path on `Enter`.
+  Rationale: It reduces shortcut ambiguity and simplifies key handling across
+  terminals while matching common CLI UX.
+  Date/Author: 2026-02-20 / codex.
+
 ## Outcomes & Retrospective
 
-In progress. On completion, summarize:
+Completed implementation and automated validation.
 
-- Which APIs were changed and why.
-- Whether shortcut behavior differed on tested terminals.
-- Any residual risk that should be tracked in a future plan.
+- API changes:
+  Replaced `LlamaModel::token_to_str` with `LlamaModel::token_to_piece` using
+  a UTF-8 decoder and `special = true`, preserving generated piece order and
+  `trim()` output behavior.
+- Shortcut behavior:
+  Added `is_translate_shortcut` and test coverage for positive
+  (`Enter`) and negative cases, and removed fallback shortcut handling paths.
+- Edition alignment:
+  Updated workspace edition to 2024 and fixed resulting
+  `unsafe_op_in_unsafe_fn` warning in log callback code.
+- Residual risk:
+  No blocking issues remain. A quick interactive smoke check in the target
+  terminal/tmux setup is still recommended before release packaging.
 
 ## Context and Orientation
 
@@ -81,9 +129,10 @@ back into displayable UTF-8 text.
 
 The second change is in `crates/petit-tui/src/main.rs`, inside
 `handle_key_event`. Translation is currently triggered by a compound condition
-that includes `Ctrl+Enter`, `Ctrl+M`, and `F5`, accompanied by a TODO comment
-about terminal behavior. The footer text in `crates/petit-tui/src/ui.rs` should
-stay aligned with actual shortcuts so user guidance remains correct.
+that previously included `Ctrl+Enter`, `Ctrl+M`, and `F5`, accompanied by a
+TODO comment about terminal behavior. Final behavior now uses `Enter` submit
+without fallback keys. The footer text in `crates/petit-tui/src/ui.rs` should
+stay aligned with actual shortcut behavior so user guidance remains correct.
 
 ## Plan of Work
 
@@ -96,13 +145,12 @@ Compile immediately after this edit to catch type and encoding mismatches.
 Milestone 2 hardens shortcut handling in `crates/petit-tui/src/main.rs` by
 extracting translation trigger matching into a small helper function, for
 example `fn is_translate_shortcut(key: &KeyEvent) -> bool`. Replace the inline
-compound condition with this helper and remove the TODO. Keep fallback keys.
+compound condition with this helper and remove the TODO.
 
 Milestone 3 adds focused tests in `crates/petit-tui/src/main.rs` under
 `#[cfg(test)]` that verify `is_translate_shortcut` returns true for
-`Ctrl+Enter`, `Ctrl+M`, and `F5`, and false for unrelated keys. If footer copy
-in `crates/petit-tui/src/ui.rs` is changed to mention fallbacks, verify text
-still fits existing layout.
+`Enter` and false for unrelated keys. If footer copy in
+`crates/petit-tui/src/ui.rs` changes, verify text still fits existing layout.
 
 Milestone 4 runs validation commands, records concise output snippets in this
 plan, and updates `Progress`, `Surprises & Discoveries`, `Decision Log`, and
@@ -134,8 +182,9 @@ After Milestone 1 and 2 edits:
   Edition alignment checks:
 
     rg -n "edition" Cargo.toml crates/*/Cargo.toml
-    cargo metadata --format-version 1 > /tmp/petit-cargo-metadata.json
-    rg -n '"edition":"2024"' /tmp/petit-cargo-metadata.json
+    cargo metadata --format-version 1 --filter-platform x86_64-apple-darwin > /tmp/petit-cargo-metadata.json
+    jq -r '.packages[] | select(.name|test("^petit-(core|tui)$")) |
+    [.name,.edition] | @tsv' /tmp/petit-cargo-metadata.json
 
 Plan-completion sanity checks:
 
@@ -147,7 +196,7 @@ Manual shortcut confirmation:
     cargo run -p petit-tui
 
 In the running UI, enter sample text and verify translation request starts for
-`Ctrl+Enter`, `Ctrl+M`, and `F5`.
+`Enter`.
 
 ## Validation and Acceptance
 
@@ -160,8 +209,7 @@ Accept this task as complete when all conditions below are true:
 - The TODO at `crates/petit-tui/src/main.rs:140` is removed and replaced by
   explicit helper-backed shortcut logic.
 - Automated tests cover shortcut matching for positive and negative cases.
-- Manual TUI run confirms translation can be triggered with primary and fallback
-  shortcuts.
+- Manual TUI run confirms translation can be triggered with `Enter`.
 - Cargo manifests and resolved workspace metadata reflect Rust edition 2024.
 
 ## Idempotence and Recovery
@@ -178,8 +226,17 @@ and add tests before reattempting behavior changes.
 Capture implementation evidence here during execution:
 
 - Warning-strict check output snippet:
+  `Checking petit-core v0.1.0`, `Checking petit-tui v0.1.0`,
+  `Finished dev profile ...`.
 - Test output snippet:
+  `test result: ok. 24 passed ...` for `petit-core` and
+  `test result: ok. 2 passed ...` for `petit-tui` shortcut tests.
 - Manual shortcut validation notes (terminal emulator, OS, observed keys):
+  User-reported manual run on macOS:
+  in tmux, only `F5` worked in Alacritty and Ghostty;
+  outside tmux, `Ctrl+M` worked in Ghostty but not Alacritty.
+  Final follow-up changes applied: plain `Enter` now submits translation and
+  fallback keys (`Ctrl+M`, `F5`) were removed.
 
 ## Interfaces and Dependencies
 
@@ -201,3 +258,11 @@ module boundaries.
   cleanup (deprecation removal and terminal shortcut confirmation).
 - 2026-02-19: Expanded task scope to include Rust edition alignment from 2021
   to 2024, with manifest and validation requirements.
+- 2026-02-20: Implemented code changes for detokenization, shortcut helper/tests,
+  footer hint alignment, and edition 2024 migration; validated with checks/tests.
+- 2026-02-20: Added `Shift+Enter` translation shortcut based on macOS/tmux
+  manual findings; updated tests and UI hint copy.
+- 2026-02-20: Aligned shortcut UX with common CLI behavior by making plain
+  `Enter` submit translation and removing multiline input via Enter.
+- 2026-02-20: Removed fallback submit keys (`Ctrl+M`, `F5`) and cleaned dead
+  `KeyCode::Enter` handling path in `handle_key_event`.

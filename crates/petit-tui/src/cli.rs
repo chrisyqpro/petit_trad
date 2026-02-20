@@ -2,7 +2,7 @@
 
 //! CLI argument parsing for petit-tui.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::path::PathBuf;
 
 #[derive(Debug, Default)]
@@ -28,10 +28,16 @@ impl CliArgs {
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--model" => cli.model = Some(parse_path(&mut args, "--model")?),
-                "--source-lang" => cli.source_lang = Some(parse_string(&mut args, "--source-lang")?),
-                "--target-lang" => cli.target_lang = Some(parse_string(&mut args, "--target-lang")?),
+                "--source-lang" => {
+                    cli.source_lang = Some(parse_string(&mut args, "--source-lang")?)
+                }
+                "--target-lang" => {
+                    cli.target_lang = Some(parse_string(&mut args, "--target-lang")?)
+                }
                 "--gpu-layers" => cli.gpu_layers = Some(parse_u32(&mut args, "--gpu-layers")?),
-                "--context-size" => cli.context_size = Some(parse_u32(&mut args, "--context-size")?),
+                "--context-size" => {
+                    cli.context_size = Some(parse_u32(&mut args, "--context-size")?)
+                }
                 "--threads" => cli.threads = Some(parse_u32(&mut args, "--threads")?),
                 "--config" => cli.config = Some(parse_path(&mut args, "--config")?),
                 "--no-config" => cli.no_config = true,

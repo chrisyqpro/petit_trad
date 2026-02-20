@@ -2,9 +2,9 @@
 
 //! Config loading and precedence handling for petit-tui.
 
-use anyhow::{anyhow, Result};
-use petit_core::language::{normalize_lang, validate_pair};
+use anyhow::{Result, anyhow};
 use petit_core::Config;
+use petit_core::language::{normalize_lang, validate_pair};
 use serde::Deserialize;
 use std::env;
 use std::fs;

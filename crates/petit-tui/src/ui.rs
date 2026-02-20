@@ -4,11 +4,11 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
-use ratatui::Frame;
 
 use crate::app::{App, Focus};
 
@@ -31,7 +31,9 @@ pub fn render(app: &App, frame: &mut Frame) {
     let input_area = layout[1];
     let output_area = layout[2];
 
-    let focus_style = Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD);
+    let focus_style = Style::default()
+        .fg(Color::Cyan)
+        .add_modifier(Modifier::BOLD);
     let border_style = Style::default().fg(Color::Gray);
 
     let input_block = Block::default()
@@ -84,7 +86,9 @@ pub fn render(app: &App, frame: &mut Frame) {
 
 fn header_widget(app: &App) -> Paragraph<'static> {
     let label_style = Style::default().fg(Color::Gray);
-    let value_style = Style::default().fg(Color::White).add_modifier(Modifier::BOLD);
+    let value_style = Style::default()
+        .fg(Color::White)
+        .add_modifier(Modifier::BOLD);
     let focus_label = match app.focus {
         Focus::Input => "Input",
         Focus::Output => "Output",
@@ -130,7 +134,10 @@ fn status_widget(app: &App) -> Paragraph<'static> {
         "Ready".to_string()
     };
 
-    let line = Line::from(vec![Span::styled(status_text, Style::default().fg(Color::White))]);
+    let line = Line::from(vec![Span::styled(
+        status_text,
+        Style::default().fg(Color::White),
+    )]);
 
     Paragraph::new(line)
         .alignment(Alignment::Left)
@@ -140,11 +147,11 @@ fn status_widget(app: &App) -> Paragraph<'static> {
 fn hints_widget(area: Rect) -> Paragraph<'static> {
     let width = area.width as usize;
     let hints = if width < 70 {
-        "Ctrl+Q Quit | Ctrl+Enter Translate | Tab Focus"
+        "Ctrl+Q Quit | Enter Translate | Tab Focus"
     } else if width < 100 {
-        "Ctrl+Q Quit | Ctrl+Enter Translate | Tab Focus | Ctrl+R Swap | Ctrl+L Clear"
+        "Ctrl+Q Quit | Enter Translate | Tab Focus | Ctrl+R Swap | Ctrl+L Clear"
     } else {
-        "Ctrl+Q Quit | Ctrl+Enter Translate | Tab Focus | Ctrl+R Swap | Ctrl+L Clear | Ctrl+S Source | Ctrl+T Target"
+        "Ctrl+Q Quit | Enter Translate | Tab Focus | Ctrl+R Swap | Ctrl+L Clear | Ctrl+S Source | Ctrl+T Target"
     };
     let line = Line::from(vec![Span::styled(hints, Style::default().fg(Color::Gray))]);
 
