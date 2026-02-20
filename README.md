@@ -11,23 +11,46 @@ Local translation tool using TranslateGemma models via local llama.cpp bindings.
 ## Quick Start
 
 1. Install Rust (stable) and Cargo.
-2. Validate the workspace:
+1. Validate the workspace:
 
 ```bash
 cargo check
 cargo test --workspace
 ```
 
-3. Run the TUI:
+1. Run the TUI:
 
 ```bash
 cargo run -p petit-tui
 ```
 
-4. One-shot stdin mode:
+1. One-shot stdin mode:
 
 ```bash
 echo "Hello, how are you?" | cargo run -p petit-tui -- --stdin --target-lang fr
+```
+
+## CI and Releases
+
+Pull requests and pushes to `main` run CPU-only checks on Linux and macOS via
+GitHub Actions.
+
+Release artifacts are produced when pushing a tag that matches `v*`, for
+example:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Each release uploads `tar.gz` archives containing the `petit` binary for Linux
+x64 and macOS arm64.
+
+To run the same CI commands locally:
+
+```bash
+cargo check --workspace --features cpu-only
+cargo test --workspace --features cpu-only
 ```
 
 ## GPU Backends
@@ -46,6 +69,14 @@ export CUDACXX=/usr/local/cuda/bin/nvcc
 export CUDAToolkit_ROOT=/usr/local/cuda
 ```
 
+If you hit backend or linker issues while validating CI paths locally, try a
+clean CPU-only pass first:
+
+```bash
+cargo clean
+cargo check --workspace --features cpu-only
+```
+
 ## Model Files
 
 Models are not checked into git. By default, config expects:
@@ -53,6 +84,12 @@ Models are not checked into git. By default, config expects:
 - `models/translategemma-12b-it-GGUF/translategemma-12b-it.Q8_0.gguf`
 
 Override with CLI (`--model`), env vars, or config.
+
+Config file precedence is:
+
+- `--config <path>`
+- `$XDG_CONFIG_HOME/petit_trad/config.toml` (or `$HOME/.config/petit_trad/config.toml`)
+- `config/default.toml`
 
 ## Repository Organization
 

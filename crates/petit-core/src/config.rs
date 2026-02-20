@@ -12,59 +12,19 @@ pub struct Config {
     pub model_path: PathBuf,
 
     /// Number of GPU layers to offload (0 = CPU only)
-    #[serde(default = "default_gpu_layers")]
     pub gpu_layers: u32,
 
     /// Context size for the model
-    #[serde(default = "default_context_size")]
     pub context_size: u32,
 
     /// Number of threads for CPU inference
-    #[serde(default = "default_threads")]
     pub threads: u32,
 
     /// Write llama.cpp logs to a file instead of stderr
-    #[serde(default = "default_log_to_file")]
     pub log_to_file: bool,
 
     /// Path to the log file when log_to_file is enabled
-    #[serde(default = "default_log_path")]
     pub log_path: PathBuf,
-}
-
-fn default_gpu_layers() -> u32 {
-    999 // Offload all layers by default
-}
-
-fn default_context_size() -> u32 {
-    2048
-}
-
-fn default_threads() -> u32 {
-    4
-}
-
-fn default_log_to_file() -> bool {
-    false
-}
-
-fn default_log_path() -> PathBuf {
-    PathBuf::from("logs/llama.log")
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            model_path: PathBuf::from(
-                "models/translategemma-12b-it-GGUF/translategemma-12b-it.Q8_0.gguf",
-            ),
-            gpu_layers: default_gpu_layers(),
-            context_size: default_context_size(),
-            threads: default_threads(),
-            log_to_file: default_log_to_file(),
-            log_path: default_log_path(),
-        }
-    }
 }
 
 impl Config {
@@ -94,8 +54,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_default_values() {
-        let config = Config::default();
+    fn test_parse_full_toml_with_required_values() {
+        let toml_str = r#"
+model_path = "models/translategemma-12b-it-GGUF/translategemma-12b-it.Q8_0.gguf"
+gpu_layers = 999
+context_size = 2048
+threads = 4
+log_to_file = false
+log_path = "logs/llama.log"
+"#;
+
+        let config = Config::from_toml(toml_str).expect("parse should succeed");
         assert_eq!(
             config.model_path,
             PathBuf::from("models/translategemma-12b-it-GGUF/translategemma-12b-it.Q8_0.gguf")
@@ -129,15 +98,8 @@ mod tests {
         let toml_str = r#"
 model_path = "my-model.gguf"
 "#;
-        let config = Config::from_toml(toml_str).expect("parse should succeed");
-
-        assert_eq!(config.model_path, PathBuf::from("my-model.gguf"));
-        // Defaults should apply
-        assert_eq!(config.gpu_layers, 999);
-        assert_eq!(config.context_size, 2048);
-        assert_eq!(config.threads, 4);
-        assert!(!config.log_to_file);
-        assert_eq!(config.log_path, PathBuf::from("logs/llama.log"));
+        let result = Config::from_toml(toml_str);
+        assert!(result.is_err());
     }
 
     #[test]

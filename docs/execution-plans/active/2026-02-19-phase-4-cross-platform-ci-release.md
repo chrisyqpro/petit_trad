@@ -16,15 +16,33 @@ test feedback.
 ## Progress
 
 - [x] (2026-02-19 09:00Z) Initial phase scope recorded from prior roadmap notes.
-- [ ] (2026-02-19 09:00Z) Run and document macOS Metal validation checklist.
-- [ ] (2026-02-19 09:00Z) Add GitHub Actions CI for Linux and macOS CPU checks.
-- [ ] (2026-02-19 09:00Z) Add tagged release workflow with binary artifacts.
-- [ ] (2026-02-19 09:00Z) Update docs with exact commands and troubleshooting.
+- [x] (2026-02-19 10:22Z) Ran and documented macOS Metal validation checklist.
+- [x] (2026-02-19 10:24Z) Added GitHub Actions CI for Linux and macOS CPU checks.
+- [x] (2026-02-19 10:24Z) Added tagged release workflow with binary artifacts.
+- [x] (2026-02-19 10:26Z) Updated docs with exact commands and troubleshooting.
+- [ ] (2026-02-19 10:28Z) Capture first CI and release run URLs after pushing to GitHub.
 
 ## Surprises & Discoveries
 
-- Observation: No new platform findings recorded yet in this plan revision.
-  Evidence: Not run yet in this plan iteration.
+- Observation: Metal feature path successfully loads and runs with the 27B model
+  when the model path is configured in user config.
+  Evidence: `echo "Hello, how are you?" | cargo run -p petit-tui --features
+  metal -- --stdin --target-lang fr` produced
+  `Bonjour, comment allez-vous ?`.
+
+- Observation: Metal backend initialization is confirmed in llama runtime logs.
+  Evidence: `logs/llama.log` contains
+  `llama_model_load_from_file_impl: using device Metal (Apple M1 Max)` and
+  multiple `load_tensors: layer ... assigned to device Metal` lines.
+
+- Observation: Workspace tests pass after workflow and doc updates.
+  Evidence: `cargo test --workspace` passed with 24 unit tests in `petit-core`
+  and no failures.
+
+- Observation: Existing deprecation warnings are visible in `petit-core` during
+  build and test.
+  Evidence: Warnings reference `LlamaModel::token_to_str` and
+  `Special::Tokenize` in `crates/petit-core/src/model_manager.rs`.
 
 ## Decision Log
 
@@ -36,21 +54,36 @@ test feedback.
   Rationale: Release artifacts should be based on a validated platform baseline.
   Date/Author: 2026-02-19 / codex.
 
+- Decision: Scope CI checks to CPU-only features on Linux and macOS.
+  Rationale: This keeps PR feedback deterministic and avoids GPU runner drift.
+  Date/Author: 2026-02-19 / codex.
+
+- Decision: Publish tagged release assets as `tar.gz` archives with
+  `${tag}-${platform}` naming.
+  Rationale: Compression reduces artifact size and naming is explicit for users.
+  Date/Author: 2026-02-19 / codex.
+
 ## Outcomes & Retrospective
 
-In progress. Complete this section when the phase is closed, including shipped
-artifacts, missed items, and follow-up work.
+Phase 4 implementation landed for repository automation and contributor docs.
+The repository now has CI checks at `.github/workflows/ci.yml` for Linux/macOS
+CPU-only `cargo check` and `cargo test`, and a tag-driven release workflow at
+`.github/workflows/release.yml` that builds and publishes `petit` archives.
+
+macOS Metal validation commands were exercised on an arm64 host and confirmed
+that Metal is actually selected by llama.cpp at runtime. This was verified with
+both successful translation output and backend log lines in `logs/llama.log`.
+
+Follow-up work remaining is operational, not implementation: run the workflows
+in GitHub after pushing commits and record CI/release run URLs below.
 
 ## Context and Orientation
 
 The repository already ships feature forwarding for `cuda`, `metal`, `vulkan`,
 and `cpu-only` from `crates/petit-tui/Cargo.toml` to
 `crates/petit-core/Cargo.toml`. Historical notes indicate WSL CUDA validation
-was successful. Remaining gaps are:
-
-- macOS Metal validation evidence
-- `.github/workflows` CI pipeline
-- `.github/workflows` release pipeline
+was successful. This phase adds fresh automation and doc coverage for
+Linux/macOS CPU verification plus tag release publishing.
 
 Primary files likely touched by this plan:
 
@@ -83,10 +116,22 @@ Baseline test command after workflow edits:
 
     cargo test --workspace
 
+Environment capture commands used for this phase:
+
+  uname -a
+  sw_vers
+  rustc -V
+  cargo -V
+
 CI/release workflow checks should include:
 
     git status --short
     rg --files .github/workflows
+
+Release trigger command:
+
+  git tag v0.1.0
+  git push origin v0.1.0
 
 ## Validation and Acceptance
 
@@ -96,6 +141,12 @@ Accept this plan as complete when:
 - CI workflow runs on Linux and macOS and passes for current `main`.
 - Release workflow produces expected artifacts on tag events.
 - Docs include exact commands and expected outcomes for contributors.
+
+Current status in this workspace:
+
+- Completed: Metal checklist documentation, workflow implementation, docs update,
+  and local `cargo test --workspace` validation.
+- Pending outside local workspace: first remote CI/release executions and links.
 
 ## Idempotence and Recovery
 
@@ -108,9 +159,17 @@ rollback by reverting specific workflow commits if needed.
 
 Keep short references here as work proceeds:
 
-- CI run URL(s):
-- Release run URL(s):
+- CI run URL(s): Pending first push with `.github/workflows/ci.yml`.
+- Release run URL(s): Pending first `v*` tag push.
 - Metal validation output snippet:
+
+  Running `target/debug/petit --stdin --target-lang fr`
+  Bonjour, comment allez-vous ?
+
+- Metal backend log snippet:
+
+  llama_model_load_from_file_impl: using device Metal (Apple M1 Max)
+  load_tensors: layer 0 assigned to device Metal, is_swa = 1
 
 ## Interfaces and Dependencies
 
@@ -126,3 +185,9 @@ No Rust public API change is required for this phase.
 
 - 2026-02-19: Retrofitted this file to full ExecPlan structure from
   `docs/PLANS.md`.
+- 2026-02-19: Implemented CI/release workflows and updated docs, then recorded
+  local Metal and test validation evidence plus pending remote run links.
+- 2026-02-19: Updated model-default alignment and validation evidence after
+  verifying successful 27B Metal load and translation output.
+- 2026-02-19: Aligned docs with XDG config precedence and recorded explicit
+  Metal runtime log evidence.

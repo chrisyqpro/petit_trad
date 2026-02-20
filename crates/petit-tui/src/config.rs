@@ -3,7 +3,6 @@
 //! Config loading and precedence handling for petit-tui.
 
 use anyhow::{anyhow, Result};
-use directories::ProjectDirs;
 use petit_core::language::{normalize_lang, validate_pair};
 use petit_core::Config;
 use serde::Deserialize;
@@ -14,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use crate::cli::CliArgs;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct AppConfig {
     pub core: Config,
     pub source_lang: String,
@@ -55,37 +54,26 @@ struct UiConfig {
 }
 
 pub fn load_config(cli: &CliArgs) -> Result<AppConfig> {
-    let mut core = Config::default();
-    let mut source_lang = "en".to_string();
-    let mut target_lang = "fr".to_string();
+    let mut file = load_merged_file_config(cli)?;
+
+    let mut core = Config {
+        model_path: take_required(file.model.path.take(), "model.path")?,
+        gpu_layers: take_required(file.model.gpu_layers.take(), "model.gpu_layers")?,
+        context_size: take_required(file.model.context_size.take(), "model.context_size")?,
+        threads: take_required(file.model.threads.take(), "model.threads")?,
+        log_to_file: take_required(file.model.log_to_file.take(), "model.log_to_file")?,
+        log_path: take_required(file.model.log_path.take(), "model.log_path")?,
+    };
+    let mut source_lang = take_required(
+        file.translation.default_source.take(),
+        "translation.default_source",
+    )?;
+    let mut target_lang = take_required(
+        file.translation.default_target.take(),
+        "translation.default_target",
+    )?;
     let mut stdin_mode = cli.stdin;
-    let mut compact_lang_display = false;
-
-    let env_no_config = env_bool("PETIT_TRAD_NO_CONFIG");
-    let mut no_config = env_no_config.unwrap_or(false);
-    if cli.no_config {
-        no_config = true;
-    }
-
-    if cli.config.is_some() {
-        no_config = false;
-    }
-
-    let config_path = config_path(cli, no_config)?;
-    if let Some(path) = config_path.as_deref() {
-        if path.exists() {
-            let file = load_file_config(path)?;
-            apply_file_config(
-                &file,
-                &mut core,
-                &mut source_lang,
-                &mut target_lang,
-                &mut compact_lang_display,
-            );
-        } else if config_path_is_explicit(cli) && !no_config {
-            return Err(anyhow!("Config file not found: {}", path.display()));
-        }
-    }
+    let mut compact_lang_display = file.ui.compact_lang_display.unwrap_or(false);
 
     apply_env_config(
         &mut core,
@@ -113,29 +101,77 @@ pub fn load_config(cli: &CliArgs) -> Result<AppConfig> {
     })
 }
 
-fn config_path(cli: &CliArgs, no_config: bool) -> Result<Option<PathBuf>> {
-    if no_config {
-        return Ok(None);
+fn load_merged_file_config(cli: &CliArgs) -> Result<FileConfig> {
+    let mut merged = load_file_config(Path::new("config/default.toml"))?;
+
+    let env_no_config = env_bool("PETIT_TRAD_NO_CONFIG").unwrap_or(false);
+    let no_user_config = cli.no_config || env_no_config;
+    if no_user_config {
+        return Ok(merged);
     }
 
     if let Some(path) = cli.config.clone() {
-        return Ok(Some(path));
+        if !path.exists() {
+            return Err(anyhow!("Config file not found: {}", path.display()));
+        }
+        let overlay = load_file_config(&path)?;
+        merge_file_config(&mut merged, overlay);
+        return Ok(merged);
     }
 
-    if let Some(path) = env_var("PETIT_TRAD_CONFIG") {
-        return Ok(Some(PathBuf::from(path)));
+    if let Some(path) = xdg_user_config_path() {
+        if path.exists() {
+            let overlay = load_file_config(&path)?;
+            merge_file_config(&mut merged, overlay);
+        }
     }
 
-    Ok(default_config_path())
+    Ok(merged)
 }
 
-fn config_path_is_explicit(cli: &CliArgs) -> bool {
-    cli.config.is_some() || env_var("PETIT_TRAD_CONFIG").is_some()
+fn merge_file_config(base: &mut FileConfig, overlay: FileConfig) {
+    if overlay.model.path.is_some() {
+        base.model.path = overlay.model.path;
+    }
+    if overlay.model.gpu_layers.is_some() {
+        base.model.gpu_layers = overlay.model.gpu_layers;
+    }
+    if overlay.model.context_size.is_some() {
+        base.model.context_size = overlay.model.context_size;
+    }
+    if overlay.model.threads.is_some() {
+        base.model.threads = overlay.model.threads;
+    }
+    if overlay.model.log_to_file.is_some() {
+        base.model.log_to_file = overlay.model.log_to_file;
+    }
+    if overlay.model.log_path.is_some() {
+        base.model.log_path = overlay.model.log_path;
+    }
+
+    if overlay.translation.default_source.is_some() {
+        base.translation.default_source = overlay.translation.default_source;
+    }
+    if overlay.translation.default_target.is_some() {
+        base.translation.default_target = overlay.translation.default_target;
+    }
+    if overlay.ui.compact_lang_display.is_some() {
+        base.ui.compact_lang_display = overlay.ui.compact_lang_display;
+    }
 }
 
-fn default_config_path() -> Option<PathBuf> {
-    ProjectDirs::from("com", "petit", "petit_trad").map(|dirs| {
-        let mut path = dirs.config_dir().to_path_buf();
+fn take_required<T>(value: Option<T>, field: &str) -> Result<T> {
+    value.ok_or_else(|| anyhow!("Missing required config value: {field}"))
+}
+
+fn xdg_user_config_path() -> Option<PathBuf> {
+    let base = env_var("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| env_var("HOME").map(|home| PathBuf::from(home).join(".config")));
+
+    base.map(|base| {
+        let mut path = base;
+        path.push("petit_trad");
         path.push("config.toml");
         path
     })
@@ -146,44 +182,6 @@ fn load_file_config(path: &Path) -> Result<FileConfig> {
         .map_err(|err| anyhow!("Failed to read config {}: {err}", path.display()))?;
     toml::from_str(&content)
         .map_err(|err| anyhow!("Failed to parse config {}: {err}", path.display()))
-}
-
-fn apply_file_config(
-    file: &FileConfig,
-    core: &mut Config,
-    source: &mut String,
-    target: &mut String,
-    compact_lang_display: &mut bool,
-) {
-    if let Some(path) = &file.model.path {
-        core.model_path = path.clone();
-    }
-    if let Some(gpu_layers) = file.model.gpu_layers {
-        core.gpu_layers = gpu_layers;
-    }
-    if let Some(context_size) = file.model.context_size {
-        core.context_size = context_size;
-    }
-    if let Some(threads) = file.model.threads {
-        core.threads = threads;
-    }
-    if let Some(log_to_file) = file.model.log_to_file {
-        core.log_to_file = log_to_file;
-    }
-    if let Some(log_path) = &file.model.log_path {
-        core.log_path = log_path.clone();
-    }
-
-    if let Some(source_lang) = &file.translation.default_source {
-        *source = source_lang.clone();
-    }
-    if let Some(target_lang) = &file.translation.default_target {
-        *target = target_lang.clone();
-    }
-    if let Some(compact) = file.ui.compact_lang_display {
-        *compact_lang_display = compact;
-    }
-
 }
 
 fn apply_env_config(
