@@ -20,7 +20,7 @@ test feedback.
 - [x] (2026-02-19 10:24Z) Added GitHub Actions CI for Linux and macOS CPU checks.
 - [x] (2026-02-19 10:24Z) Added tagged release workflow with binary artifacts.
 - [x] (2026-02-19 10:26Z) Updated docs with exact commands and troubleshooting.
-- [ ] (2026-02-19 10:28Z) Capture first CI and release run URLs after pushing to GitHub.
+- [x] (2026-02-19 23:12Z) Captured first CI and release run URLs after pushing to GitHub.
 
 ## Surprises & Discoveries
 
@@ -74,8 +74,9 @@ macOS Metal validation commands were exercised on an arm64 host and confirmed
 that Metal is actually selected by llama.cpp at runtime. This was verified with
 both successful translation output and backend log lines in `logs/llama.log`.
 
-Follow-up work remaining is operational, not implementation: run the workflows
-in GitHub after pushing commits and record CI/release run URLs below.
+First-run workflow verification is complete on GitHub: both CI and Release
+workflows finished successfully, and the release contains Linux and macOS
+binary artifacts.
 
 ## Context and Orientation
 
@@ -146,7 +147,8 @@ Current status in this workspace:
 
 - Completed: Metal checklist documentation, workflow implementation, docs update,
   and local `cargo test --workspace` validation.
-- Pending outside local workspace: first remote CI/release executions and links.
+- Completed outside local workspace: first remote CI/release executions and
+  links recorded below.
 
 ## Idempotence and Recovery
 
@@ -159,8 +161,13 @@ rollback by reverting specific workflow commits if needed.
 
 Keep short references here as work proceeds:
 
-- CI run URL(s): Pending first push with `.github/workflows/ci.yml`.
-- Release run URL(s): Pending first `v*` tag push.
+- CI run URL(s): <https://github.com/chrisyqpro/petit_trad/actions/runs/22210294033> (success)
+- Release run URL(s): <https://github.com/chrisyqpro/petit_trad/actions/runs/22210342606> (success)
+- Release page URL(s): <https://github.com/chrisyqpro/petit_trad/releases/tag/v0.1.0-phase4-verify-20260219>
+- Release assets:
+
+  petit-v0.1.0-phase4-verify-20260219-linux-x64.tar.gz
+  petit-v0.1.0-phase4-verify-20260219-macos-arm64.tar.gz
 - Metal validation output snippet:
 
   Running `target/debug/petit --stdin --target-lang fr`
@@ -191,3 +198,6 @@ No Rust public API change is required for this phase.
   verifying successful 27B Metal load and translation output.
 - 2026-02-19: Aligned docs with XDG config precedence and recorded explicit
   Metal runtime log evidence.
+- 2026-02-19: Executed remote workflow verification by pushing `main` and
+  annotated tag `v0.1.0-phase4-verify-20260219`; recorded successful CI and
+  Release run URLs plus published asset names.
