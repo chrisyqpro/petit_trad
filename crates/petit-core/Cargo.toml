@@ -21,3 +21,6 @@ cuda = ["llama-cpp-2/cuda"]
 metal = ["llama-cpp-2/metal"]
 vulkan = ["llama-cpp-2/vulkan"]
 cpu-only = []
+
+[lints]
+workspace = true

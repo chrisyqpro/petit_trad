@@ -24,3 +24,6 @@ cuda = ["petit-core/cuda"]
 metal = ["petit-core/metal"]
 vulkan = ["petit-core/vulkan"]
 cpu-only = ["petit-core/cpu-only"]
+
+[lints]
+workspace = true

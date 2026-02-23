@@ -13,18 +13,37 @@ Optional by backend:
 - CUDA toolkit for `--features cuda`
 - Xcode Command Line Tools for `--features metal` on macOS
 
-## Quick Checks
+## Verification
+
+The canonical command -- run this before every commit. It auto-formats, then
+lints, then check and tests:
 
 ```bash
-cargo check
-cargo test --workspace
+./scripts/check.sh --fix
 ```
 
-To mirror CI's deterministic path:
+Check-only mode (matches CI exactly, no auto-format):
 
 ```bash
-cargo check --workspace --features cpu-only
-cargo test --workspace --features cpu-only
+./scripts/check.sh
+```
+
+Override features for a local GPU build:
+
+```bash
+./scripts/check.sh --fix --features metal   # macOS Metal
+./scripts/check.sh --fix --features cuda    # CUDA
+```
+
+### Ad-hoc Commands
+
+For running individual stages without the script:
+
+```bash
+cargo fmt --check
+cargo clippy --workspace --features cpu-only -- -D warnings
+cargo check --workspace --features "$FEATURES"
+cargo test --workspace
 ```
 
 ## Run TUI

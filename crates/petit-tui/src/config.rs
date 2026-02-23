@@ -119,11 +119,11 @@ fn load_merged_file_config(cli: &CliArgs) -> Result<FileConfig> {
         return Ok(merged);
     }
 
-    if let Some(path) = xdg_user_config_path() {
-        if path.exists() {
-            let overlay = load_file_config(&path)?;
-            merge_file_config(&mut merged, overlay);
-        }
+    if let Some(path) = xdg_user_config_path()
+        && path.exists()
+    {
+        let overlay = load_file_config(&path)?;
+        merge_file_config(&mut merged, overlay);
     }
 
     Ok(merged)

@@ -1,26 +1,63 @@
-# AGENTS.md - petit_trad
+# AGENTS.md
 
-## Core Docs
+Follow pointers for other docs, but load deeper docs only when the task needs them.
 
-- `ARCHITECTURE.md` - High-level architecture map
-- `docs/PLANS.md` - Requirements for execution plans
-- `docs/execution-plans` - Folder for plans
-- `docs/BUILD.md` - Project build guide
-- `docs/design-docs/index.md` - Design docs TOC
-- `docs/product-specs/index.md` - Product specs TOC
+## Doc Map
 
-## Rules
+- `ARCHITECTURE.md` - Top-level architecture design: component boundaries, invariants, data flow; For human and agents.
+  Read before any structural change.
+- `docs/PLANS.md` - ExecPlan requirements; read before writing any plan
+- `docs/BUILD.md` - build commands, verification pipeline, release process
+- `docs/design-docs/index.md` - TOC for technical design docs
+- `docs/product-specs/index.md` - TOC for product specs
+- `docs/execution-plans/research/` - research findings for design and plan
+- `docs/execution-plans/active/` - current active ExecPlans
+- `docs/execution-plans/completed/` - completed ExecPlans (historical context)
+- `docs/execution-plans/tech-debt-tracker.md` - known technical debt
 
-1. Read `ARCHITECTURE.md` and corresponding docs before structural changes
-2. Plans are treated as first-class artifacts. Ephemeral lightweight plans are used for small changes
-3. Plans are created in `active` folder in `docs/execution-plans` and should be moved to `completed` folder after completion
-4. Use an ExecPlan (as described in `docs/PLANS.md`) from design to implementation, when writing complex features
-   or significant refactors
-5. Known technical debt is tracked in `docs/execution-plans/tech-debt-tracker.md`
-6. Keep line length <= 120 in git-tracked Markdown files
-7. Never use emoji
-8. Always check and format before commit
-9. Commit and PR message should strictly follow conventional commits format. Line length: title (first line) 50, body 72.
-   In title, only use one word for scope. (e.g. plan instead of execute-plan). In body, use list (if more than one change)
-   to explain what are changed and why (each in natural human sentence). Body should be as one block.
-10. Never skip git signature and commit message for tag, merge and so on.
+## Workflow Detail
+
+Every non-trivial task follows these phases:
+
+0. **Branch** -- Always work on a new seperate branch
+1. **Research** -- Read source files deeply. Never skim. Write findings to `docs/execution-plans/research/<YYYY-MM-DD>-<slug>.md`
+   before planning. The research artifact is your review surface for the human, with findings / insights helpful for design
+   and plan; if the research is wrong, the plan and implementation will be wrong.
+2. **Plan** -- Create `docs/execution-plans/active/<YYYY-MM-DD>-<slug>.md` following `docs/PLANS.md` exactly. The plan must
+   be self-contained: a novice should be able to implement the feature end-to-end from the plan alone. Stop after writing
+   the plan and wait for human review and approval.
+3. **Execute** -- Implement against the approved plan. Mark tasks done in the Progress section as you go. Commit frequently
+   (small, coherent diffs). Do not pause for confirmation. Resolve ambiguities by logging the decision in the Decision Log
+   and continuing.
+4. **Verify** -- Run `./scripts/check.sh --fix` from repo root. This runs auto-format, linters, and tests. A clean pass is
+   required before committing. Record the final output in the ExecPlan's Artifacts section as evidence.
+5. **Pull Request** (Optional) -- If explicitly required, push the branch to remote then send a PR to main branch
+
+## Git Requirements
+
+- Commit message format: Conventional Commits format strictly. Title first line <= 50 chars, one-word scope. Body lines
+  <= 72 chars. Use a markdown style list of natural human sentences to explain what and why, when multiple things
+  changed, in the body. Body should be one whole block.
+- Never skip commit message for tag, merge, or any git operations. For gpg signature, only skip for intermediate commits.
+  Never skip signature for merge, tag or PR.
+
+## Expansion Paths
+
+**Keyword-routed prompts**: when the project benefits from per-stage agent prompts, create `.agents/prompts/` and add a
+keyword router section to `AGENTS.md`.
+Suggested map: `design`, `plan`, `execute`, `verify`, `review` -> `.agents/prompts/<keyword>.md`
+For prompts to be enable in copilot VSCode as a slash command, create softlink in `.github/prompts/`. They don't have to
+be keyword-routing type only.
+
+**Agent skills**: when a reusable agent skill is needed (e.g., a commit-message helper or context-gathering workflow),
+create `.agents/skills/<skill-name>/SKILL.md` and reference it from `AGENTS.md`.
+
+**Pre-commit hooks**: if format drift becomes a recurring problem despite CI, add a `.pre-commit-config.yaml` and a git
+hooks setup that runs `./scripts/check.sh --fix`. The script is already compatible with this use.
+
+## Other Rules
+
+- Line length <= 120 in git-tracked Markdown.
+- For Markdown and git commit message, fill lines naturally close to limit before breaking (soft cap, can exceed by a
+  few chars for readability).
+- Never use emoji.

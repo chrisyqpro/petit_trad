@@ -24,12 +24,11 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Check workspace
-        run: cargo check --workspace --features cpu-only
-
-      - name: Test workspace
-        run: cargo test --workspace --features cpu-only
+      - name: Verify script
+        run: ./scripts/check.sh

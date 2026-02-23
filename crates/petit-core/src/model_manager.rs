@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+// Unsafe is required for the llama.cpp FFI logging callbacks (`llama_log_set`,
+// `ggml_log_set`, and `CStr::from_ptr`). There is no safe abstraction for these
+// C function pointer registration APIs in the current llama-cpp-2 crate.
+#![allow(unsafe_code)]
+
 //! Model management for llama.cpp inference
 
 use crate::{Config, Error, Result};

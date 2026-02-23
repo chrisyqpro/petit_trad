@@ -75,7 +75,8 @@ petit_trad/
 │   └── execution-plans/       # Active/completed execution plans
 ├── proto/                     # Python experiments and prompt checks
 └── config/
-    └── default.toml           # Baseline runtime configuration
+│  └── default.toml            # Baseline runtime configuration
+└── scripts/                   # Scripts for verification
 ```
 
 ---

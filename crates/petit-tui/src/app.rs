@@ -353,12 +353,10 @@ fn remove_at(buffer: &mut String, index: usize) {
 
 fn line_starts(text: &str) -> Vec<usize> {
     let mut starts = vec![0];
-    let mut index = 0usize;
-    for ch in text.chars() {
+    for (index, ch) in text.chars().enumerate() {
         if ch == '\n' {
             starts.push(index + 1);
         }
-        index += 1;
     }
     starts
 }
