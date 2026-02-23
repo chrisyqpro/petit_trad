@@ -17,15 +17,16 @@ Follow pointers for other docs, but load deeper docs only when the task needs th
 
 ## Workflow Detail
 
-Every non-trivial task follows these phases: (Don't modify any code in step 0-2; DON't stop within a phase)
+Every non-trivial task follows these phases: (Don't modify any code in step 1 or 2; DON't stop within a step)
 
 0. **Branch** -- Always work on a new seperate branch
 1. **Research** -- Read source files deeply. Never skim. Write findings to `docs/execution-plans/research/<YYYY-MM-DD>-<slug>.md`
-   before planning. The research artifact is your review surface for the human, with findings / insights helpful for design
-   and plan; if the research is wrong, the plan and implementation will be wrong. Stop for review and approval before moving on.
-2. **Plan** -- Create `docs/execution-plans/active/<YYYY-MM-DD>-<slug>.md` following `docs/PLANS.md` exactly. The plan must
-   be self-contained: a novice should be able to implement the feature end-to-end from the plan alone. Stop after writing
-   the plan and wait for human review and approval.
+   before planning (Don't read existing researches unless related). The research artifact is your review surface for the
+   human, with findings / insights helpful for design and plan; if the research is wrong, the plan and implementation
+   will be wrong. Stop for review and approval before moving on.
+2. **Plan** -- Create `docs/execution-plans/active/<YYYY-MM-DD>-<slug>.md` always following `docs/PLANS.md` exactly and
+   only. The plan must be self-contained: a novice should be able to implement the feature end-to-end from the plan alone.
+   Stop after writing the plan and wait for human review and approval.
 3. **Execute** -- Implement against the approved plan. Mark tasks done in the Progress section as you go. Commit frequently
    (small, coherent diffs. always run check script and achieve a clean pass before commit). Do not pause for confirmation.
    Resolve ambiguities by logging the decision in the Decision Log and continuing. Once all tasks are finished wait for
@@ -39,6 +40,8 @@ Every non-trivial task follows these phases: (Don't modify any code in step 0-2;
 - Commit message format: Conventional Commits format strictly. Title first line <= 50 chars, one-word scope. Body lines
   <= 72 chars. Use a markdown style list of natural human sentences to explain what and why, when multiple things
   changed, in the body. Body should be one whole block.
+- Never put literal `\n` escape sequences inside `git commit -m` body text. For multiline commit messages, make sure the
+  body contains real line breaks instead of `\n`.
 - Never skip commit message for tag, merge, or any git operations. Skip gpg signature for intermediate commits, but never
   skip signature for merge, tag or PR.
 
@@ -58,6 +61,7 @@ hooks setup that runs `./scripts/check.sh --fix`. The script is already compatib
 
 ## Other Rules
 
+- Only modify this file when explicitly told to.
 - Line length <= 120 (NOT 80) in git-tracked Markdown.
 - For Markdown and git commit message, fill lines naturally close to limit before breaking (soft cap, can exceed by a
   few chars for readability).

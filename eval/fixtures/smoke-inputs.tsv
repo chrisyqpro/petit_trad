@@ -1,0 +1,40 @@
+# petit_trad translation smoke corpus inputs (v1)
+# Schema:
+# case_id<TAB>source_lang<TAB>target_lang<TAB>input_text
+#
+# This file is the curated simple-translation corpus. It contains meaningful
+# short phrases and localized-literal examples intended to verify translation
+# behavior, not opaque identifier preservation.
+# Generate `eval/fixtures/smoke.tsv` from this corpus on a working local backend
+# (for example Metal) using `scripts/eval-capture.sh`.
+
+hello-en-fr	en	fr	Hello.
+thanks-en-de	en	de	Thank you.
+morning-en-es	en	es	Good morning.
+night-en-it	en	it	Good night.
+tomorrow-en-pt	en	pt	See you tomorrow.
+help-en-nl	en	nl	I need help.
+station-en-sv	en	sv	Where is the station?
+price-en-no	en	no	How much is this?
+wait-en-da	en	da	Please wait.
+understand-en-fi	en	fi	I understand.
+not-understand-en-pl	en	pl	I do not understand.
+repeat-en-cs	en	cs	Can you repeat that?
+rust-en-sk	en	sk	I am learning Rust.
+test-en-hu	en	hu	This is a test.
+weather-en-ro	en	ro	The weather is nice today.
+door-en-bg	en	bg	Open the door.
+window-en-sl	en	sl	Close the window.
+left-en-hr	en	hr	Turn left.
+right-en-lt	en	lt	Turn right.
+time-en-lv	en	lv	What time is it?
+airport-en-tr	en	tr	I am at the airport.
+file-en-el	en	el	The file is ready.
+offline-en-id	en	id	The server is offline.
+build-en-ms	en	ms	The build passed.
+ja-thanks-ja-en	ja	en	ありがとうございます。
+zh-hello-zh-en	zh	en	你好。
+ko-thanks-ko-en	ko	en	감사합니다.
+ru-hello-ru-en	ru	en	Привет.
+uk-thanks-uk-en	uk	en	Дякую.
+th-hello-th-en	th	en	สวัสดี

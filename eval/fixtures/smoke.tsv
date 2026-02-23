@@ -1,0 +1,38 @@
+# petit_trad translation eval fixtures (v1)
+# GENERATED FILE: captured from scripts/eval-capture.sh
+# Schema:
+# case_id<TAB>source_lang<TAB>target_lang<TAB>input_text<TAB>expected_output
+#
+# This file is for actual translation-behavior checks (simple phrases,
+# literals, localized formatting). Regenerate on the same model/backend
+# config when intentionally updating expectations.
+hello-en-fr	en	fr	Hello.	Bonjour.
+thanks-en-de	en	de	Thank you.	Bitte.
+morning-en-es	en	es	Good morning.	Buenos días.
+night-en-it	en	it	Good night.	Buona notte.
+tomorrow-en-pt	en	pt	See you tomorrow.	Até amanhã.
+help-en-nl	en	nl	I need help.	Ik heb hulp nodig.
+station-en-sv	en	sv	Where is the station?	Var ligger stationen?
+price-en-no	en	no	How much is this?	Hvor mye koster dette?
+wait-en-da	en	da	Please wait.	Vent venligst.
+understand-en-fi	en	fi	I understand.	Ymmärrän.
+not-understand-en-pl	en	pl	I do not understand.	Nie rozumiem.
+repeat-en-cs	en	cs	Can you repeat that?	Můžeš to zopakovat?
+rust-en-sk	en	sk	I am learning Rust.	Učím sa Rust.
+test-en-hu	en	hu	This is a test.	Ez egy teszt.
+weather-en-ro	en	ro	The weather is nice today.	Astăzi este o vreme frumoasă.
+door-en-bg	en	bg	Open the door.	Отвори вратата.
+window-en-sl	en	sl	Close the window.	Zapri okno.
+left-en-hr	en	hr	Turn left.	Skrenite lijevo.
+right-en-lt	en	lt	Turn right.	Pasukite į dešinę.
+time-en-lv	en	lv	What time is it?	Cik ir pulksten?
+airport-en-tr	en	tr	I am at the airport.	Havalimanındayım.
+file-en-el	en	el	The file is ready.	Το αρχείο είναι έτοιμο.
+offline-en-id	en	id	The server is offline.	Server tidak aktif.
+build-en-ms	en	ms	The build passed.	Pembinaan berjaya.
+ja-thanks-ja-en	ja	en	ありがとうございます。	Thank you.
+zh-hello-zh-en	zh	en	你好。	Hello.
+ko-thanks-ko-en	ko	en	감사합니다.	Thank you.
+ru-hello-ru-en	ru	en	Привет.	Hello.
+uk-thanks-uk-en	uk	en	Дякую.	Thank you.
+th-hello-th-en	th	en	สวัสดี	สวัสดีครับ/ค่ะ (Sawasdee krap/ka)

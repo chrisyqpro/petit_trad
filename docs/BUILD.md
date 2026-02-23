@@ -34,6 +34,53 @@ Override features for a local GPU build:
 ./scripts/check.sh --fix --features cuda    # CUDA
 ```
 
+## Translation Regression Eval
+
+Use the eval harness to run real translations and compare stdout against
+checked-in fixtures. This is separate from `scripts/check.sh` because it needs a
+local GGUF model and can be slow.
+
+Example (run smoke eval against an existing captured `smoke.tsv`):
+
+```bash
+./scripts/eval.sh \
+  --model models/translategemma-27b-it-GGUF/translategemma-27b-it.Q8_0.gguf
+```
+
+If your local model or machine needs different runtime settings, override them:
+
+```bash
+./scripts/eval.sh \
+  --model /absolute/path/to/model.gguf \
+  --features metal \
+  --gpu-layers 0 \
+  --context-size 256 \
+  --threads 1
+```
+
+Notes:
+
+- Fixtures live under `eval/fixtures/`.
+- `eval/fixtures/smoke-inputs.tsv` is the curated simple-translation corpus
+  used to generate `eval/fixtures/smoke.tsv`.
+- `eval/fixtures/smoke.tsv` is for actual translation behavior checks.
+- The harness uses `petit-tui` `--stdin` mode and passes `--no-config` plus
+  explicit model/language flags for each case.
+- The harness prints per-case pass/fail and exits non-zero on mismatches or
+  translation command errors.
+
+Capture or refresh translation expectations on a working local backend (for
+example Metal) before running the smoke eval:
+
+```bash
+./scripts/eval-capture.sh \
+  --model /absolute/path/to/model.gguf \
+  --features metal \
+  --gpu-layers 0 \
+  --context-size 256 \
+  --threads 1
+```
+
 ### Ad-hoc Commands
 
 For running individual stages without the script:
