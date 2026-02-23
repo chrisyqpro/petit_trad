@@ -50,6 +50,9 @@ fn run() -> Result<()> {
 
     let app_config = load_config(&cli)?;
     let _compact_lang_display = app_config.compact_lang_display;
+    if cli.benchmark {
+        return run_benchmark(app_config, &cli);
+    }
     if app_config.stdin_mode {
         return run_stdin(app_config);
     }
@@ -68,6 +71,92 @@ fn run() -> Result<()> {
     let _ = worker.join();
 
     result
+}
+
+fn run_benchmark(config: AppConfig, cli: &CliArgs) -> Result<()> {
+    let warmup_runs = cli.benchmark_warmup_runs.unwrap_or(0);
+    let runs = cli.benchmark_runs.unwrap_or(1);
+    let max_new_tokens = cli.benchmark_max_new_tokens.unwrap_or(256);
+    if runs == 0 {
+        return Err(anyhow::anyhow!("--runs must be at least 1"));
+    }
+
+    let text = if let Some(text) = &cli.benchmark_text {
+        text.clone()
+    } else if cli.stdin {
+        let mut input = String::new();
+        io::stdin().read_to_string(&mut input)?;
+        if input.trim().is_empty() {
+            return Err(anyhow::anyhow!(
+                "benchmark input is empty (provide --text or pipe stdin)"
+            ));
+        }
+        input
+    } else {
+        "Hello, how are you?".to_string()
+    };
+
+    println!("Model: {}", config.core.model_path.display());
+    println!(
+        "Config: gpu_layers={} context_size={} threads={}",
+        config.core.gpu_layers, config.core.context_size, config.core.threads
+    );
+    println!(
+        "Languages: {} -> {}",
+        config.source_lang, config.target_lang
+    );
+    println!("Input chars: {}", text.chars().count());
+    println!("Warmup runs: {warmup_runs}");
+    println!("Measured runs: {runs}");
+    println!("Max new tokens: {max_new_tokens}");
+
+    let startup_start = Instant::now();
+    let translator = GemmaTranslator::new(config.core)?.with_max_new_tokens(max_new_tokens);
+    let startup_elapsed = startup_start.elapsed();
+    println!("Startup: {:.2?}", startup_elapsed);
+
+    for run_idx in 0..warmup_runs {
+        let start = Instant::now();
+        let _ = translator.translate(&text, &config.source_lang, &config.target_lang)?;
+        let elapsed = start.elapsed();
+        println!("Warmup {}: {:.2?}", run_idx + 1, elapsed);
+    }
+
+    let mut run_times = Vec::with_capacity(runs as usize);
+    let mut last_output = String::new();
+    for run_idx in 0..runs {
+        let start = Instant::now();
+        let output = translator.translate(&text, &config.source_lang, &config.target_lang)?;
+        let elapsed = start.elapsed();
+        println!("Run {}: {:.2?}", run_idx + 1, elapsed);
+        run_times.push(elapsed);
+        last_output = output;
+    }
+
+    let min = run_times.iter().copied().min().unwrap_or(Duration::ZERO);
+    let max = run_times.iter().copied().max().unwrap_or(Duration::ZERO);
+    let avg = duration_avg(&run_times);
+    let total_measured = run_times.iter().map(Duration::as_secs_f64).sum::<f64>();
+
+    println!("Source: {text}");
+    println!("Target: {last_output}");
+    println!("Average: {:.2?}", avg);
+    println!("Min: {:.2?}", min);
+    println!("Max: {:.2?}", max);
+    println!(
+        "Measured total: {:.2?}",
+        Duration::from_secs_f64(total_measured)
+    );
+
+    Ok(())
+}
+
+fn duration_avg(values: &[Duration]) -> Duration {
+    if values.is_empty() {
+        return Duration::ZERO;
+    }
+    let total_secs = values.iter().map(Duration::as_secs_f64).sum::<f64>();
+    Duration::from_secs_f64(total_secs / values.len() as f64)
 }
 
 fn run_stdin(config: AppConfig) -> Result<()> {
@@ -95,7 +184,7 @@ fn run_app(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     app: &mut App,
     tx: &Sender<TranslationRequest>,
-    rx: &Receiver<TranslationResponse>,
+    rx: &Receiver<WorkerEvent>,
 ) -> Result<()> {
     let tick_rate = Duration::from_millis(200);
     let mut last_tick = Instant::now();
@@ -112,8 +201,15 @@ fn run_app(
             }
         }
 
-        while let Ok(response) = rx.try_recv() {
-            app.apply_translation_result(response.into_result());
+        while let Ok(event) = rx.try_recv() {
+            match event {
+                WorkerEvent::TranslatorInitializing => app.begin_worker_initialization(),
+                WorkerEvent::TranslatorReady => app.apply_worker_ready(),
+                WorkerEvent::TranslatorInitFailed(err) => app.apply_worker_init_error(err),
+                WorkerEvent::Translation(response) => {
+                    app.apply_translation_result(response.into_result())
+                }
+            }
         }
 
         if app.should_quit {
@@ -243,7 +339,7 @@ fn request_translation(app: &mut App, tx: &Sender<TranslationRequest>) {
     };
 
     if tx.send(request).is_err() {
-        app.apply_translation_result(Err("Translation worker unavailable".to_string()));
+        app.apply_worker_unavailable();
     }
 }
 
@@ -251,40 +347,60 @@ fn start_translation_worker(
     config: Config,
 ) -> (
     Sender<TranslationRequest>,
-    Receiver<TranslationResponse>,
+    Receiver<WorkerEvent>,
     thread::JoinHandle<()>,
 ) {
     let (request_tx, request_rx) = mpsc::channel::<TranslationRequest>();
-    let (response_tx, response_rx) = mpsc::channel::<TranslationResponse>();
+    let (response_tx, response_rx) = mpsc::channel::<WorkerEvent>();
 
     let worker = thread::spawn(move || {
-        let mut translator: Option<GemmaTranslator> = None;
-        for request in request_rx {
-            if translator.is_none() {
-                match GemmaTranslator::new(config.clone()) {
-                    Ok(instance) => translator = Some(instance),
-                    Err(err) => {
-                        let _ = response_tx.send(TranslationResponse::Err(err.to_string()));
-                        continue;
-                    }
-                }
-            }
+        let _ = response_tx.send(WorkerEvent::TranslatorInitializing);
 
+        let mut translator: Option<GemmaTranslator> = None;
+        let mut init_error: Option<String> = None;
+        match GemmaTranslator::new(config) {
+            Ok(instance) => {
+                translator = Some(instance);
+                let _ = response_tx.send(WorkerEvent::TranslatorReady);
+            }
+            Err(err) => {
+                let err_text = err.to_string();
+                init_error = Some(err_text.clone());
+                let _ = response_tx.send(WorkerEvent::TranslatorInitFailed(err_text));
+            }
+        }
+
+        for request in request_rx {
             let response = match translator.as_ref() {
                 Some(instance) => instance
                     .translate(&request.text, &request.source_lang, &request.target_lang)
                     .map(TranslationResponse::Ok)
                     .unwrap_or_else(|err| TranslationResponse::Err(err.to_string())),
-                None => TranslationResponse::Err("Translator unavailable".to_string()),
+                None => {
+                    let err_text = init_error
+                        .as_deref()
+                        .map(|err| format!("Translator unavailable: {err}"))
+                        .unwrap_or_else(|| "Translator unavailable".to_string());
+                    TranslationResponse::Err(err_text)
+                }
             };
 
-            let _ = response_tx.send(response);
+            let _ = response_tx.send(WorkerEvent::Translation(response));
         }
     });
 
     (request_tx, response_rx, worker)
 }
 
+#[derive(Debug)]
+enum WorkerEvent {
+    TranslatorInitializing,
+    TranslatorReady,
+    TranslatorInitFailed(String),
+    Translation(TranslationResponse),
+}
+
+#[derive(Debug)]
 enum TranslationResponse {
     Ok(String),
     Err(String),
@@ -370,5 +486,45 @@ mod tests {
         assert!(!is_translate_shortcut(&f5));
         assert!(!is_translate_shortcut(&ctrl_r));
         assert!(!is_translate_shortcut(&tab));
+    }
+
+    #[test]
+    fn worker_reports_init_failure_when_model_missing() {
+        let missing_model = std::env::temp_dir().join(format!(
+            "petit-missing-model-{}-{}.gguf",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let config = Config {
+            model_path: missing_model,
+            gpu_layers: 0,
+            context_size: 2048,
+            threads: 1,
+            log_to_file: false,
+            log_path: std::path::PathBuf::from("logs/test-llama.log"),
+        };
+
+        let (tx, rx, worker) = start_translation_worker(config);
+
+        let first = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("worker should emit initializing event");
+        assert!(matches!(first, WorkerEvent::TranslatorInitializing));
+
+        let second = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("worker should emit init failure");
+        match second {
+            WorkerEvent::TranslatorInitFailed(err) => {
+                assert!(
+                    err.contains("Model file not found"),
+                    "unexpected error: {err}"
+                );
+            }
+            other => panic!("unexpected worker event: {other:?}"),
+        }
+
+        drop(tx);
+        worker.join().expect("worker thread should exit cleanly");
     }
 }

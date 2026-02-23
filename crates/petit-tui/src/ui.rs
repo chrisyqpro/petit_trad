@@ -10,7 +10,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 
-use crate::app::{App, Focus};
+use crate::app::{App, Focus, StatusKind};
 
 /// Render the application UI
 pub fn render(app: &App, frame: &mut Frame) {
@@ -124,20 +124,27 @@ fn header_widget(app: &App) -> Paragraph<'static> {
 }
 
 fn status_widget(app: &App) -> Paragraph<'static> {
-    let status_text = if app.is_loading {
-        format!("{} Translating...", spinner_symbol())
+    let (status_text, fg) = if app.is_loading {
+        (format!("{} Translating...", spinner_symbol()), Color::White)
+    } else if app.is_worker_initializing {
+        (
+            format!("{} Initializing translator...", spinner_symbol()),
+            Color::Yellow,
+        )
     } else if let Some(prompt) = app.language_prompt() {
-        prompt
-    } else if let Some(message) = &app.status_message {
-        message.clone()
+        (prompt, Color::Yellow)
+    } else if let Some(status) = &app.status_line {
+        let fg = match status.kind {
+            StatusKind::Info => Color::White,
+            StatusKind::Success => Color::Green,
+            StatusKind::Error => Color::LightRed,
+        };
+        (status.text.clone(), fg)
     } else {
-        "Ready".to_string()
+        ("Ready".to_string(), Color::White)
     };
 
-    let line = Line::from(vec![Span::styled(
-        status_text,
-        Style::default().fg(Color::White),
-    )]);
+    let line = Line::from(vec![Span::styled(status_text, Style::default().fg(fg))]);
 
     Paragraph::new(line)
         .alignment(Alignment::Left)

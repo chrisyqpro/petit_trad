@@ -16,6 +16,11 @@ pub struct CliArgs {
     pub config: Option<PathBuf>,
     pub no_config: bool,
     pub stdin: bool,
+    pub benchmark: bool,
+    pub benchmark_text: Option<String>,
+    pub benchmark_warmup_runs: Option<u32>,
+    pub benchmark_runs: Option<u32>,
+    pub benchmark_max_new_tokens: Option<u32>,
     pub show_version: bool,
     pub show_help: bool,
 }
@@ -31,9 +36,11 @@ impl CliArgs {
                 "--source-lang" => {
                     cli.source_lang = Some(parse_string(&mut args, "--source-lang")?)
                 }
+                "--src" => cli.source_lang = Some(parse_string(&mut args, "--src")?),
                 "--target-lang" => {
                     cli.target_lang = Some(parse_string(&mut args, "--target-lang")?)
                 }
+                "--tgt" => cli.target_lang = Some(parse_string(&mut args, "--tgt")?),
                 "--gpu-layers" => cli.gpu_layers = Some(parse_u32(&mut args, "--gpu-layers")?),
                 "--context-size" => {
                     cli.context_size = Some(parse_u32(&mut args, "--context-size")?)
@@ -42,6 +49,15 @@ impl CliArgs {
                 "--config" => cli.config = Some(parse_path(&mut args, "--config")?),
                 "--no-config" => cli.no_config = true,
                 "--stdin" => cli.stdin = true,
+                "--benchmark" => cli.benchmark = true,
+                "--text" => cli.benchmark_text = Some(parse_string(&mut args, "--text")?),
+                "--warmup-runs" => {
+                    cli.benchmark_warmup_runs = Some(parse_u32(&mut args, "--warmup-runs")?)
+                }
+                "--runs" => cli.benchmark_runs = Some(parse_u32(&mut args, "--runs")?),
+                "--max-new-tokens" => {
+                    cli.benchmark_max_new_tokens = Some(parse_u32(&mut args, "--max-new-tokens")?)
+                }
                 "--version" | "-V" => cli.show_version = true,
                 "--help" | "-h" => cli.show_help = true,
                 unknown => return Err(anyhow!("Unknown argument: {unknown}")),
@@ -63,13 +79,20 @@ impl CliArgs {
             "Options:\n",
             "  --model <path>         Path to GGUF model\n",
             "  --source-lang <code>   Source language (e.g. en)\n",
+            "  --src <code>           Alias for --source-lang\n",
             "  --target-lang <code>   Target language (e.g. fr)\n",
+            "  --tgt <code>           Alias for --target-lang\n",
             "  --gpu-layers <n>       GPU layers to offload\n",
             "  --context-size <n>     Context window size\n",
             "  --threads <n>          CPU threads for inference\n",
             "  --config <path>        Config file path\n",
             "  --no-config            Ignore config file\n",
             "  --stdin                Read text from stdin and exit\n",
+            "  --benchmark            Run benchmark mode and exit (uses config precedence)\n",
+            "  --text <value>         Benchmark input text (benchmark mode)\n",
+            "  --warmup-runs <n>      Warmup runs before measured runs (benchmark mode)\n",
+            "  --runs <n>             Measured benchmark runs (benchmark mode)\n",
+            "  --max-new-tokens <n>   Max output tokens for benchmark run (benchmark mode)\n",
             "  --version, -V          Print version\n",
             "  --help, -h             Print help\n"
         )

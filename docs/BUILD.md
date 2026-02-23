@@ -15,8 +15,7 @@ Optional by backend:
 
 ## Verification
 
-The canonical command -- run this before every commit. It auto-formats, then
-lints, then check and tests:
+The canonical command -- run this before every commit. It auto-formats, then lints, then check and tests:
 
 ```bash
 ./scripts/check.sh --fix
@@ -60,17 +59,59 @@ cargo run -p petit-tui --features metal
 cargo run -p petit-tui --features vulkan
 ```
 
+### Startup Feedback
+
+The TUI now starts a background translator worker immediately and reports translator initialization status in the
+footer. This makes first-use behavior more predictable because model initialization is surfaced before the first
+translation request.
+
 ## Stdin Mode
 
 ```bash
 echo "Hello, how are you?" | cargo run -p petit-tui -- --stdin --target-lang fr
 ```
 
+## Benchmarking Translation Latency
+
+Use the `petit` benchmark mode for repeatable local measurements. It reports:
+
+- `Startup`: translator/model initialization time (`GemmaTranslator::new`)
+- `Warmup` runs (optional, excluded from summary)
+- measured `Run N` timings
+- `Average`, `Min`, and `Max` across measured runs
+
+Example (CPU-only):
+
+```bash
+cargo run -p petit-tui --features cpu-only -- --benchmark \
+  --model models/translategemma-12b-it-GGUF/translategemma-12b-it.Q8_0.gguf \
+  --source-lang en --target-lang fr \
+  --text "Hello, how are you?" \
+  --max-new-tokens 64 \
+  --warmup-runs 1 \
+  --runs 3
+```
+
+Benchmark matrix to record in local notes / ExecPlans:
+
+- Short input: one sentence (cold + warm runs)
+- Medium input: 3-5 sentence paragraph (cold + warm runs)
+- Cold result: `Startup` plus the first measured `Run`
+- Warm result: subsequent measured `Run` values after warmup
+
+Interpretation notes:
+
+- `Startup` is usually the largest component on the first use because it includes model load and backend initialization.
+- `Run N` times are hardware-, model-, and feature-dependent (`cpu-only`, `metal`, `cuda`, `vulkan`), so do not compare
+  numbers across machines without recording the exact config.
+- Use a lower `--max-new-tokens` value for quick sanity checks, and a stable value when comparing before/after results.
+- Benchmark mode runs through the normal `petit-tui` config loader, so config file, env vars, and CLI overrides all
+  apply.
+
 ## Config and Model
 
 - Default config file: `config/default.toml`
-- User config path: `$XDG_CONFIG_HOME/petit_trad/config.toml`
-  (fallback: `$HOME/.config/petit_trad/config.toml`)
+- User config path: `$XDG_CONFIG_HOME/petit_trad/config.toml` (fallback: `$HOME/.config/petit_trad/config.toml`)
 - Config file precedence: `--config <path>` > XDG user config > bundled default
 - Model files are expected under `models/` unless overridden by CLI or env vars
 
@@ -87,10 +128,10 @@ export CUDAToolkit_ROOT=/usr/local/cuda
 
 The repository includes:
 
-- `.github/workflows/ci.yml`: runs CPU-only checks on `ubuntu-latest` and
-  `macos-latest` for push and pull request events to `main`
-- `.github/workflows/release.yml`: runs on pushed tags matching `v*`, builds
-  release binaries, and publishes `tar.gz` assets to a GitHub release
+- `.github/workflows/ci.yml`: runs CPU-only checks on `ubuntu-latest` and `macos-latest` for push and pull request
+  events to `main`
+- `.github/workflows/release.yml`: runs on pushed tags matching `v*`, builds release binaries, and publishes `tar.gz`
+  assets to a GitHub release
 
 ## Release Commands
 
@@ -108,9 +149,6 @@ After the workflow completes, the release should include:
 
 ## Troubleshooting
 
-- If CI fails only on one runner, compare local output with
-  `cargo test --workspace --features cpu-only`.
-- If a release is missing artifacts, verify the tag matches `v*` and that the
-  `build` job succeeded before `publish`.
-- If stale build output causes local confusion, run `cargo clean` and rerun the
-  target command.
+- If CI fails only on one runner, compare local output with `cargo test --workspace --features cpu-only`.
+- If a release is missing artifacts, verify the tag matches `v*` and that the `build` job succeeded before `publish`.
+- If stale build output causes local confusion, run `cargo clean` and rerun the target command.

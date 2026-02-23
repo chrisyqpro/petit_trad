@@ -30,21 +30,42 @@ cargo run -p petit-tui
 echo "Hello, how are you?" | cargo run -p petit-tui -- --stdin --target-lang fr
 ```
 
+## Performance and Startup Behavior
+
+- The TUI initializes the translator worker in the background at startup and shows footer status updates
+  (`Initializing translator...`, `Translator ready`, or an initialization error) before the first translation request.
+- The first usable translation experience is now easier to reason about because model initialization is surfaced
+  separately from translation completion.
+
+For repeatable local latency measurements (startup + warm runs), use:
+
+```bash
+cargo run -p petit-tui --features cpu-only -- --benchmark \
+  --model <path-to-gguf> \
+  --source-lang en --target-lang fr \
+  --text "Hello, how are you?" \
+  --max-new-tokens 64 \
+  --warmup-runs 1 \
+  --runs 3
+```
+
+Record short-input and medium-input runs separately. `Startup` captures model initialization time, while `Run N` values
+capture translation time after the translator is available. Latency is highly hardware- and model-dependent, so compare
+numbers only when the model, feature flags, and runtime config match. Benchmark mode uses the normal config/env/CLI
+precedence path, so you can omit model/language flags and rely on your configured defaults.
+
 ## CI and Releases
 
-Pull requests and pushes to `main` run CPU-only checks on Linux and macOS via
-GitHub Actions.
+Pull requests and pushes to `main` run CPU-only checks on Linux and macOS via GitHub Actions.
 
-Release artifacts are produced when pushing a tag that matches `v*`, for
-example:
+Release artifacts are produced when pushing a tag that matches `v*`, for example:
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Each release uploads `tar.gz` archives containing the `petit` binary for Linux
-x64 and macOS arm64.
+Each release uploads `tar.gz` archives containing the `petit` binary for Linux x64 and macOS arm64.
 
 To run the same CI commands locally:
 
@@ -69,8 +90,7 @@ export CUDACXX=/usr/local/cuda/bin/nvcc
 export CUDAToolkit_ROOT=/usr/local/cuda
 ```
 
-If you hit backend or linker issues while validating CI paths locally, try a
-clean CPU-only pass first:
+If you hit backend or linker issues while validating CI paths locally, try a clean CPU-only pass first:
 
 ```bash
 cargo clean

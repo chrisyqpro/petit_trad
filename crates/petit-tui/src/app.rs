@@ -16,6 +16,8 @@ pub struct App {
     pub should_quit: bool,
     /// Whether translation is in progress
     pub is_loading: bool,
+    /// Whether the background translator is initializing
+    pub is_worker_initializing: bool,
     /// Which pane is focused
     pub focus: Focus,
     /// Cursor position in the input buffer
@@ -24,8 +26,8 @@ pub struct App {
     pub input_scroll: u16,
     /// Scroll offset for the output pane
     pub output_scroll: u16,
-    /// Status message shown in the footer
-    pub status_message: Option<String>,
+    /// Status line shown in the footer when no spinner/prompt is active
+    pub status_line: Option<StatusLine>,
     /// Language edit state (if active)
     lang_edit: Option<LangEdit>,
     /// Show compact language display in header
@@ -43,6 +45,19 @@ pub enum Focus {
 pub enum LangTarget {
     Source,
     Target,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusKind {
+    Info,
+    Success,
+    Error,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatusLine {
+    pub kind: StatusKind,
+    pub text: String,
 }
 
 pub struct TranslationRequest {
@@ -66,11 +81,12 @@ impl Default for App {
             target_lang: "fr".to_string(),
             should_quit: false,
             is_loading: false,
+            is_worker_initializing: false,
             focus: Focus::Input,
             input_cursor: 0,
             input_scroll: 0,
             output_scroll: 0,
-            status_message: None,
+            status_line: None,
             lang_edit: None,
             compact_lang_display: false,
         }
@@ -114,12 +130,12 @@ impl App {
             cursor: buffer.chars().count(),
             buffer,
         });
-        self.status_message = None;
+        self.clear_status();
     }
 
     pub fn cancel_language_edit(&mut self) {
         self.lang_edit = None;
-        self.status_message = Some("Language edit canceled".to_string());
+        self.set_info_status("Language edit canceled");
     }
 
     pub fn submit_language_edit(&mut self) {
@@ -141,10 +157,10 @@ impl App {
                 } else {
                     self.target_lang = new_value;
                 }
-                self.status_message = Some("Language updated".to_string());
+                self.set_success_status("Language updated");
             }
             Err(err) => {
-                self.status_message = Some(err.to_string());
+                self.set_error_status(err.to_string());
             }
         }
     }
@@ -158,14 +174,14 @@ impl App {
 
     pub fn swap_languages(&mut self) {
         std::mem::swap(&mut self.source_lang, &mut self.target_lang);
-        self.status_message = Some("Languages swapped".to_string());
+        self.set_info_status("Languages swapped");
     }
 
     pub fn clear_input(&mut self) {
         self.input.clear();
         self.input_cursor = 0;
         self.input_scroll = 0;
-        self.status_message = Some("Input cleared".to_string());
+        self.set_info_status("Input cleared");
     }
 
     pub fn insert_char(&mut self, ch: char) {
@@ -174,7 +190,7 @@ impl App {
             insert_into(buffer, *cursor, ch);
             *cursor += insert_len;
         });
-        self.status_message = None;
+        self.clear_status();
     }
 
     pub fn insert_str(&mut self, text: &str) {
@@ -183,7 +199,7 @@ impl App {
             insert_str_into(buffer, *cursor, text);
             *cursor += insert_len;
         });
-        self.status_message = None;
+        self.clear_status();
     }
 
     pub fn backspace(&mut self) {
@@ -194,7 +210,7 @@ impl App {
             remove_at(buffer, cursor.saturating_sub(1));
             *cursor = cursor.saturating_sub(1);
         });
-        self.status_message = None;
+        self.clear_status();
     }
 
     pub fn delete(&mut self) {
@@ -204,7 +220,7 @@ impl App {
             }
             remove_at(buffer, *cursor);
         });
-        self.status_message = None;
+        self.clear_status();
     }
 
     pub fn move_left(&mut self) {
@@ -284,17 +300,17 @@ impl App {
 
     pub fn begin_translation(&mut self) -> Option<TranslationRequest> {
         if self.is_loading {
-            self.status_message = Some("Translation already in progress".to_string());
+            self.set_info_status("Translation already in progress");
             return None;
         }
         let trimmed = self.input.trim();
         if trimmed.is_empty() {
-            self.status_message = Some("Input is empty".to_string());
+            self.set_error_status("Input is empty");
             return None;
         }
 
         self.is_loading = true;
-        self.status_message = Some("Translating...".to_string());
+        self.set_info_status("Translating...");
 
         Some(TranslationRequest {
             text: self.input.clone(),
@@ -309,12 +325,55 @@ impl App {
             Ok(text) => {
                 self.output = text;
                 self.output_scroll = 0;
-                self.status_message = Some("Translation complete".to_string());
+                self.set_success_status("Translation complete");
             }
             Err(err) => {
-                self.status_message = Some(err);
+                self.set_error_status(err);
             }
         }
+    }
+
+    pub fn begin_worker_initialization(&mut self) {
+        self.is_worker_initializing = true;
+        self.set_info_status("Initializing translator...");
+    }
+
+    pub fn apply_worker_ready(&mut self) {
+        self.is_worker_initializing = false;
+        self.set_success_status("Translator ready");
+    }
+
+    pub fn apply_worker_init_error(&mut self, err: impl Into<String>) {
+        self.is_worker_initializing = false;
+        self.set_error_status(format!("Translator initialization failed: {}", err.into()));
+    }
+
+    pub fn apply_worker_unavailable(&mut self) {
+        self.is_loading = false;
+        self.set_error_status("Translation worker unavailable");
+    }
+
+    fn clear_status(&mut self) {
+        self.status_line = None;
+    }
+
+    fn set_info_status(&mut self, text: impl Into<String>) {
+        self.set_status(StatusKind::Info, text);
+    }
+
+    fn set_success_status(&mut self, text: impl Into<String>) {
+        self.set_status(StatusKind::Success, text);
+    }
+
+    fn set_error_status(&mut self, text: impl Into<String>) {
+        self.set_status(StatusKind::Error, text);
+    }
+
+    fn set_status(&mut self, kind: StatusKind, text: impl Into<String>) {
+        self.status_line = Some(StatusLine {
+            kind,
+            text: text.into(),
+        });
     }
 
     fn edit_active_buffer<F>(&mut self, mut update: F)
@@ -326,6 +385,150 @@ impl App {
         } else if self.focus == Focus::Input {
             update(&mut self.input, &mut self.input_cursor);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn begin_translation_sets_loading_and_info_status() {
+        let mut app = App::default();
+        app.input = "Hello".to_string();
+
+        let request = app.begin_translation();
+
+        assert!(request.is_some());
+        assert!(app.is_loading);
+        assert_eq!(
+            app.status_line,
+            Some(StatusLine {
+                kind: StatusKind::Info,
+                text: "Translating...".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn begin_translation_rejects_empty_input_with_error_status() {
+        let mut app = App::default();
+
+        let request = app.begin_translation();
+
+        assert!(request.is_none());
+        assert!(!app.is_loading);
+        assert_eq!(
+            app.status_line,
+            Some(StatusLine {
+                kind: StatusKind::Error,
+                text: "Input is empty".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn apply_translation_result_sets_success_status() {
+        let mut app = App::default();
+        app.is_loading = true;
+
+        app.apply_translation_result(Ok("Bonjour".to_string()));
+
+        assert!(!app.is_loading);
+        assert_eq!(app.output, "Bonjour");
+        assert_eq!(
+            app.status_line,
+            Some(StatusLine {
+                kind: StatusKind::Success,
+                text: "Translation complete".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn apply_translation_result_sets_error_status() {
+        let mut app = App::default();
+        app.is_loading = true;
+
+        app.apply_translation_result(Err("Failed to load model".to_string()));
+
+        assert!(!app.is_loading);
+        assert_eq!(
+            app.status_line,
+            Some(StatusLine {
+                kind: StatusKind::Error,
+                text: "Failed to load model".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn worker_initialization_status_is_typed() {
+        let mut app = App::default();
+
+        app.begin_worker_initialization();
+        assert!(app.is_worker_initializing);
+        assert_eq!(
+            app.status_line,
+            Some(StatusLine {
+                kind: StatusKind::Info,
+                text: "Initializing translator...".to_string(),
+            })
+        );
+
+        app.apply_worker_ready();
+        assert!(!app.is_worker_initializing);
+        assert_eq!(
+            app.status_line,
+            Some(StatusLine {
+                kind: StatusKind::Success,
+                text: "Translator ready".to_string(),
+            })
+        );
+
+        app.begin_worker_initialization();
+        app.apply_worker_init_error("Model file not found");
+        assert!(!app.is_worker_initializing);
+        assert_eq!(
+            app.status_line,
+            Some(StatusLine {
+                kind: StatusKind::Error,
+                text: "Translator initialization failed: Model file not found".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn worker_unavailable_sets_error_and_clears_loading() {
+        let mut app = App::default();
+        app.is_loading = true;
+
+        app.apply_worker_unavailable();
+
+        assert!(!app.is_loading);
+        assert_eq!(
+            app.status_line,
+            Some(StatusLine {
+                kind: StatusKind::Error,
+                text: "Translation worker unavailable".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn invalid_language_edit_sets_error_status() {
+        let mut app = App::default();
+        app.lang_edit = Some(LangEdit {
+            target: LangTarget::Source,
+            buffer: "xx".to_string(),
+            cursor: 2,
+        });
+
+        app.submit_language_edit();
+
+        let status = app.status_line.expect("status should be set");
+        assert_eq!(status.kind, StatusKind::Error);
+        assert!(status.text.contains("Unsupported language"));
     }
 }
 
