@@ -15,6 +15,8 @@ Optional by backend:
 
 ## Verification
 
+### Code Check Script
+
 The canonical command -- run this before every commit. It auto-formats, then lints, then check and tests:
 
 ```bash
@@ -34,7 +36,16 @@ Override features for a local GPU build:
 ./scripts/check.sh --fix --features cuda    # CUDA
 ```
 
-## Translation Regression Eval
+To run individual stages without the script:
+
+```bash
+cargo fmt --check
+cargo clippy --workspace --features cpu-only -- -D warnings
+cargo check --workspace --features "$FEATURES"
+cargo test --workspace
+```
+
+### Translation Regression Eval
 
 Use the eval harness to run real translations and compare stdout against
 checked-in fixtures. This is separate from `scripts/check.sh` because it needs a
@@ -81,15 +92,27 @@ example Metal) before running the smoke eval:
   --threads 1
 ```
 
-### Ad-hoc Commands
+### Runtime Smoke Harness
 
-For running individual stages without the script:
+Use the smoke harness for quick runtime sanity checks with readable per-check
+status output:
 
 ```bash
-cargo fmt --check
-cargo clippy --workspace --features cpu-only -- -D warnings
-cargo check --workspace --features "$FEATURES"
-cargo test --workspace
+./scripts/smoke.sh
+```
+
+The harness prints one line per check with `PASS`, `FAIL`, or `SKIP`, then a
+final summary. It includes model-free checks (help/version and validation
+errors) plus an optional model-backed stdin translation smoke.
+
+If no local model file is available, the model-backed smoke check reports
+`SKIP`. This is expected on fresh clones and does not replace the canonical
+verification script.
+
+To run the model-backed smoke check with a specific local GGUF file:
+
+```bash
+SMOKE_MODEL_PATH=/absolute/path/to/model.gguf ./scripts/smoke.sh
 ```
 
 ## Run TUI

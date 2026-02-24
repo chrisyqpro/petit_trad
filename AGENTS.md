@@ -35,34 +35,10 @@ Every non-trivial task follows these phases: (Don't modify any code in step 1 or
    as evidence. Do a final check, move the plan from the active to completed folder and commit anything left.
 5. **Pull Request** (Optional) -- If explicitly required, push the branch to remote then send a PR to main branch
 
-## Git Requirements
-
-- Commit message format: Conventional Commits format strictly. Title first line <= 50 chars, one-word scope. Body lines
-  <= 72 chars. Use a markdown style list of natural human sentences to explain what and why, when multiple things
-  changed, in the body. Body should be one whole block.
-- Never put literal `\n` escape sequences inside `git commit -m` body text. For multiline commit messages, make sure the
-  body contains real line breaks instead of `\n`.
-- Never skip commit message for tag, merge, or any git operations. Skip gpg signature for intermediate commits, but never
-  skip signature for merge, tag or PR.
-
-## Expansion Paths
-
-**Keyword-routed prompts**: when the project benefits from per-stage agent prompts, create `.agents/prompts/` and add a
-keyword router section to `AGENTS.md`.
-Suggested map: `design`, `plan`, `execute`, `verify`, `review` -> `.agents/prompts/<keyword>.md`
-For prompts to be enable in copilot VSCode as a slash command, create softlink in `.github/prompts/`. They don't have to
-be keyword-routing type only.
-
-**Agent skills**: when a reusable agent skill is needed (e.g., a commit-message helper or context-gathering workflow),
-create `.agents/skills/<skill-name>/SKILL.md` and reference it from `AGENTS.md`.
-
-**Pre-commit hooks**: if format drift becomes a recurring problem despite CI, add a `.pre-commit-config.yaml` and a git
-hooks setup that runs `./scripts/check.sh --fix`. The script is already compatible with this use.
-
-## Other Rules
+## Rules
 
 - Only modify this file when explicitly told to.
 - Line length <= 120 (NOT 80) in git-tracked Markdown.
-- For Markdown and git commit message, fill lines naturally close to limit before breaking (soft cap, can exceed by a
-  few chars for readability).
+- For Markdown and git commit message, fill lines naturally close to limit before naturally breaking (soft cap, can
+  exceed by a few chars for readability).
 - Never use emoji.
