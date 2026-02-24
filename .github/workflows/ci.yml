@@ -32,3 +32,14 @@ jobs:
 
       - name: Verify script
         run: ./scripts/check.sh
+
+      - name: Runtime smoke harness
+        run: ./scripts/smoke.sh
+
+      - name: Harness script syntax
+        run: sh -n scripts/eval.sh scripts/eval-capture.sh
+
+      - name: Harness help interfaces
+        run: |
+          ./scripts/eval.sh --help
+          ./scripts/eval-capture.sh --help

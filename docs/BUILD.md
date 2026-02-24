@@ -41,8 +41,8 @@ To run individual stages without the script:
 ```bash
 cargo fmt --check
 cargo clippy --workspace --features cpu-only -- -D warnings
-cargo check --workspace --features "$FEATURES"
-cargo test --workspace
+cargo check --workspace --features cpu-only
+cargo test --workspace --features cpu-only
 ```
 
 ### Translation Regression Eval
@@ -69,6 +69,11 @@ If your local model or machine needs different runtime settings, override them:
   --threads 1
 ```
 
+Note: `--features metal` only enables the Metal backend at build/runtime. The
+example keeps `--gpu-layers 0` as a conservative CPU-run configuration for
+portability. Use a non-zero value (for example `--gpu-layers 999`) to actually
+offload layers to Metal on a supported machine.
+
 Notes:
 
 - Fixtures live under `eval/fixtures/`.
@@ -91,6 +96,10 @@ example Metal) before running the smoke eval:
   --context-size 256 \
   --threads 1
 ```
+
+The same `--gpu-layers` note applies here: `0` is a conservative CPU-run
+example on a Metal-capable build. Use a non-zero value when intentionally
+capturing fixtures with Metal offload.
 
 ### Runtime Smoke Harness
 
