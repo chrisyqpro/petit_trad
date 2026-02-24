@@ -234,6 +234,11 @@ run_expect_failure \
     'cargo run --quiet -p petit-tui -- --benchmark --runs 0' \
     '--runs must be at least 1'
 
+run_expect_failure \
+    "invalid language validation" \
+    'cargo run --quiet -p petit-tui -- --no-config --src xx --tgt fr' \
+    'Invalid language pair: Unsupported language'
+
 run_optional_model_smoke
 
 printf '\n'

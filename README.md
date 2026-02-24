@@ -56,7 +56,8 @@ precedence path, so you can omit model/language flags and rely on your configure
 
 ## CI and Releases
 
-Pull requests and pushes to `main` run CPU-only checks on Linux and macOS via GitHub Actions.
+Pull requests and pushes to `main` run CPU-only verification plus runtime smoke
+checks on Linux and macOS via GitHub Actions.
 
 Release artifacts are produced when pushing a tag that matches `v*`, for example:
 
@@ -67,11 +68,11 @@ git push origin v0.1.0
 
 Each release uploads `tar.gz` archives containing the `petit` binary for Linux x64 and macOS arm64.
 
-To run the same CI commands locally:
+To run the same CI verification flow locally:
 
 ```bash
-cargo check --workspace --features cpu-only
-cargo test --workspace --features cpu-only
+./scripts/check.sh
+./scripts/smoke.sh
 ```
 
 ## GPU Backends
