@@ -1,0 +1,18 @@
+[*]
+indent_size = 2
+indent_style = space
+max_line_length = 100
+tab_width = 8
+
+[*.py]
+indent_size = 4
+
+[*.rs]
+indent_size = 4
+
+[*.sh]
+# --language-variant
+shell_variant      = bash
+binary_next_line   = true
+# --case-indent
+switch_case_indent = true
