@@ -1,17 +1,15 @@
 # Repo Organization Refresh
 
-This ExecPlan is a living document. The sections `Progress`,
-`Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective`
-were maintained during execution and completion.
+This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`,
+`Decision Log`, and `Outcomes & Retrospective` were maintained during execution and completion.
 
 This plan follows `docs/PLANS.md`.
 
 ## Purpose / Big Picture
 
-This change made repository documentation easier to navigate for new
-contributors by introducing clearer architecture entry points and standardized
-planning structure. The visible outcome is a clearer docs layout and planning
-workflow.
+This change made repository documentation easier to navigate for new contributors by introducing
+clearer architecture entry points and standardized planning structure. The visible outcome is a
+clearer docs layout and planning workflow.
 
 ## Progress
 
@@ -22,19 +20,17 @@ workflow.
 
 ## Surprises & Discoveries
 
-- Observation: Documentation discoverability was reduced by mixed folder intent.
-  Evidence: Architecture/process/build docs were not clearly separated.
+- Observation: Documentation discoverability was reduced by mixed folder intent. Evidence:
+  Architecture/process/build docs were not clearly separated.
 
 ## Decision Log
 
 - Decision: Keep a concise root `ARCHITECTURE.md` and detailed design docs under
-  `docs/design-docs/`.
-  Rationale: Enables quick orientation without duplicating full details.
+  `docs/design-docs/`. Rationale: Enables quick orientation without duplicating full details.
   Date/Author: 2026-02-19 / codex.
 
-- Decision: Track non-trivial work in `docs/execution-plans/`.
-  Rationale: Gives execution history and active work a stable structure.
-  Date/Author: 2026-02-19 / codex.
+- Decision: Track non-trivial work in `docs/execution-plans/`. Rationale: Gives execution history
+  and active work a stable structure. Date/Author: 2026-02-19 / codex.
 
 ## Outcomes & Retrospective
 
@@ -51,9 +47,9 @@ Deferred outcomes:
 
 ## Context and Orientation
 
-Before this change, repository docs were functional but lacked a clear mapping
-between durable design docs, product specs, and execution plans. This plan
-focused only on structure and references, not runtime behavior.
+Before this change, repository docs were functional but lacked a clear mapping between durable
+design docs, product specs, and execution plans. This plan focused only on structure and references,
+not runtime behavior.
 
 Primary files touched in this completed plan:
 
@@ -66,8 +62,8 @@ Primary files touched in this completed plan:
 
 ## Plan of Work
 
-The work proceeded in three milestones: define target documentation structure,
-apply file/folder updates, then validate references and tests.
+The work proceeded in three milestones: define target documentation structure, apply file/folder
+updates, then validate references and tests.
 
 ## Concrete Steps
 
@@ -87,8 +83,8 @@ Accepted when:
 
 ## Idempotence and Recovery
 
-Documentation changes are idempotent and can be reapplied safely. If a link or
-path drifts, update references and record the correction in a revision note.
+Documentation changes are idempotent and can be reapplied safely. If a link or path drifts, update
+references and record the correction in a revision note.
 
 ## Artifacts and Notes
 
@@ -99,10 +95,9 @@ Summary evidence:
 
 ## Interfaces and Dependencies
 
-This plan changed documentation boundaries only. It did not modify public Rust
-interfaces, runtime APIs, or feature behavior.
+This plan changed documentation boundaries only. It did not modify public Rust interfaces, runtime
+APIs, or feature behavior.
 
 ## Revision Note
 
-- 2026-02-19: Retrofitted this completed record to full ExecPlan structure from
-  `docs/PLANS.md`.
+- 2026-02-19: Retrofitted this completed record to full ExecPlan structure from `docs/PLANS.md`.

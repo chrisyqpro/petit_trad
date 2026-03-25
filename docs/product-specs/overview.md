@@ -2,8 +2,9 @@
 
 ## Summary
 
-`petit_trad` is a local translation tool using TranslateGemma models.
-The first product surface is a terminal UI (`petit`) with one-shot stdin mode.
+`petit_trad` is a local translation tool using TranslateGemma models. The first product surface is a
+terminal UI (`petit`) with one-shot stdin mode. It also supports optional glossary-constrained
+translation for terminology consistency.
 
 ## Primary Users
 
@@ -14,4 +15,5 @@ The first product surface is a terminal UI (`petit`) with one-shot stdin mode.
 
 - Local-only translation with no cloud API dependency
 - Practical terminal workflow for interactive and scripted usage
+- Optional glossary-aware translation for consistent terminology
 - Shared Rust core that supports multiple frontends over time

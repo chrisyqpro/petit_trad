@@ -17,7 +17,8 @@ Optional by backend:
 
 ### Code Check Script
 
-The canonical command -- run this before every commit. It auto-formats, then lints, then check and tests:
+The canonical command -- run this before every commit. It auto-formats, then lints, then check and
+tests:
 
 ```bash
 ./scripts/check.sh --fix
@@ -47,9 +48,8 @@ cargo test --workspace --features cpu-only
 
 ### Translation Regression Eval
 
-Use the eval harness to run real translations and compare stdout against
-checked-in fixtures. This is separate from `scripts/check.sh` because it needs a
-local GGUF model and can be slow.
+Use the eval harness to run real translations and compare stdout against checked-in fixtures. This
+is separate from `scripts/check.sh` because it needs a local GGUF model and can be slow.
 
 Example (run smoke eval against an existing captured `smoke.tsv`):
 
@@ -69,24 +69,25 @@ If your local model or machine needs different runtime settings, override them:
   --threads 1
 ```
 
-Note: `--features metal` only enables the Metal backend at build/runtime. The
-example keeps `--gpu-layers 0` as a conservative CPU-run configuration for
-portability. Use a non-zero value (for example `--gpu-layers 999`) to actually
-offload layers to Metal on a supported machine.
+Note: `--features metal` only enables the Metal backend at build/runtime. The example keeps
+`--gpu-layers 0` as a conservative CPU-run configuration for portability. Use a non-zero value (for
+example `--gpu-layers 999`) to actually offload layers to Metal on a supported machine.
 
 Notes:
 
 - Fixtures live under `eval/fixtures/`.
-- `eval/fixtures/smoke-inputs.tsv` is the curated simple-translation corpus
-  used to generate `eval/fixtures/smoke.tsv`.
+- `eval/fixtures/smoke-inputs.tsv` is the curated simple-translation corpus used to generate
+  `eval/fixtures/smoke.tsv`.
 - `eval/fixtures/smoke.tsv` is for actual translation behavior checks.
-- The harness uses `petit-tui` `--stdin` mode and passes `--no-config` plus
-  explicit model/language flags for each case.
-- The harness prints per-case pass/fail and exits non-zero on mismatches or
-  translation command errors.
+- The harness uses `petit-tui` `--stdin` mode and passes `--no-config` plus explicit model/language
+  flags for each case.
+- The default eval path also forces `--no-glossary` and clears glossary env vars so fixture
+  verification stays on one deterministic baseline.
+- The harness prints per-case pass/fail and exits non-zero on mismatches or translation command
+  errors.
 
-Capture or refresh translation expectations on a working local backend (for
-example Metal) before running the smoke eval:
+Capture or refresh translation expectations on a working local backend (for example Metal) before
+running the smoke eval:
 
 ```bash
 ./scripts/eval-capture.sh \
@@ -97,26 +98,27 @@ example Metal) before running the smoke eval:
   --threads 1
 ```
 
-The same `--gpu-layers` note applies here: `0` is a conservative CPU-run
-example on a Metal-capable build. Use a non-zero value when intentionally
-capturing fixtures with Metal offload.
+The same `--gpu-layers` note applies here: `0` is a conservative CPU-run example on a Metal-capable
+build. Use a non-zero value when intentionally capturing fixtures with Metal offload.
 
 ### Runtime Smoke Harness
 
-Use the smoke harness for quick runtime sanity checks with readable per-check
-status output:
+Use the smoke harness for quick runtime sanity checks with readable per-check status output:
 
 ```bash
 ./scripts/smoke.sh
 ```
 
-The harness prints one line per check with `PASS`, `FAIL`, or `SKIP`, then a
-final summary. It includes model-free checks (help/version and validation
-errors) plus an optional model-backed stdin translation smoke.
+The harness prints one line per check with `PASS`, `FAIL`, or `SKIP`, then a final summary. It
+includes model-free checks (help/version and validation errors) plus an optional model-backed stdin
+translation smoke.
 
-If no local model file is available, the model-backed smoke check reports
-`SKIP`. This is expected on fresh clones and does not replace the canonical
-verification script.
+The default model-backed smoke run is an isolated baseline: it uses `--no-config`, forces
+`--no-glossary`, and clears glossary env vars so caller config does not change what the harness is
+verifying.
+
+If no local model file is available, the model-backed smoke check reports `SKIP`. This is expected
+on fresh clones and does not replace the canonical verification script.
 
 To run the model-backed smoke check with a specific local GGUF file:
 
@@ -140,9 +142,9 @@ cargo run -p petit-tui --features vulkan
 
 ### Startup Feedback
 
-The TUI now starts a background translator worker immediately and reports translator initialization status in the
-footer. This makes first-use behavior more predictable because model initialization is surfaced before the first
-translation request.
+The TUI now starts a background translator worker immediately and reports translator initialization
+status in the footer. This makes first-use behavior more predictable because model initialization is
+surfaced before the first translation request.
 
 ## Stdin Mode
 
@@ -180,17 +182,20 @@ Benchmark matrix to record in local notes / ExecPlans:
 
 Interpretation notes:
 
-- `Startup` is usually the largest component on the first use because it includes model load and backend initialization.
-- `Run N` times are hardware-, model-, and feature-dependent (`cpu-only`, `metal`, `cuda`, `vulkan`), so do not compare
-  numbers across machines without recording the exact config.
-- Use a lower `--max-new-tokens` value for quick sanity checks, and a stable value when comparing before/after results.
-- Benchmark mode runs through the normal `petit-tui` config loader, so config file, env vars, and CLI overrides all
-  apply.
+- `Startup` is usually the largest component on the first use because it includes model load and
+  backend initialization.
+- `Run N` times are hardware-, model-, and feature-dependent (`cpu-only`, `metal`, `cuda`,
+  `vulkan`), so do not compare numbers across machines without recording the exact config.
+- Use a lower `--max-new-tokens` value for quick sanity checks, and a stable value when comparing
+  before/after results.
+- Benchmark mode runs through the normal `petit-tui` config loader, so config file, env vars, and
+  CLI overrides all apply.
 
 ## Config and Model
 
 - Default config file: `config/default.toml`
-- User config path: `$XDG_CONFIG_HOME/petit_trad/config.toml` (fallback: `$HOME/.config/petit_trad/config.toml`)
+- User config path: `$XDG_CONFIG_HOME/petit_trad/config.toml` (fallback:
+  `$HOME/.config/petit_trad/config.toml`)
 - Config file precedence: `--config <path>` > XDG user config > bundled default
 - Model files are expected under `models/` unless overridden by CLI or env vars
 
@@ -207,10 +212,10 @@ export CUDAToolkit_ROOT=/usr/local/cuda
 
 The repository includes:
 
-- `.github/workflows/ci.yml`: runs CPU-only checks on `ubuntu-latest` and `macos-latest` for push and pull request
-  events to `main`
-- `.github/workflows/release.yml`: runs on pushed tags matching `v*`, builds release binaries, and publishes `tar.gz`
-  assets to a GitHub release
+- `.github/workflows/ci.yml`: runs CPU-only checks on `ubuntu-latest` and `macos-latest` for push
+  and pull request events to `main`
+- `.github/workflows/release.yml`: runs on pushed tags matching `v*`, builds release binaries, and
+  publishes `tar.gz` assets to a GitHub release
 
 ## Release Commands
 
@@ -228,6 +233,8 @@ After the workflow completes, the release should include:
 
 ## Troubleshooting
 
-- If CI fails only on one runner, compare local output with `cargo test --workspace --features cpu-only`.
-- If a release is missing artifacts, verify the tag matches `v*` and that the `build` job succeeded before `publish`.
+- If CI fails only on one runner, compare local output with
+  `cargo test --workspace --features cpu-only`.
+- If a release is missing artifacts, verify the tag matches `v*` and that the `build` job succeeded
+  before `publish`.
 - If stale build output causes local confusion, run `cargo clean` and rerun the target command.

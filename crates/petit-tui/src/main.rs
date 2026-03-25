@@ -67,8 +67,7 @@ fn run() -> Result<()> {
     );
     let (tx, rx, worker) = start_translation_worker(app_config.core);
     let result = run_app(&mut terminal, &mut app, &tx, &rx);
-    drop(tx);
-    let _ = worker.join();
+    shutdown_worker(tx, worker);
 
     result
 }
@@ -225,7 +224,7 @@ fn run_app(
 }
 
 fn handle_key_event(app: &mut App, key: KeyEvent, tx: &Sender<TranslationRequest>) {
-    if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
+    if is_quit_shortcut(&key) {
         app.should_quit = true;
         return;
     }
@@ -330,6 +329,17 @@ fn is_text_input(key: &KeyEvent) -> bool {
 
 fn is_translate_shortcut(key: &KeyEvent) -> bool {
     key.code == KeyCode::Enter
+}
+
+fn shutdown_worker(request_tx: Sender<TranslationRequest>, worker: thread::JoinHandle<()>) {
+    drop(request_tx);
+    if worker.is_finished() {
+        let _ = worker.join();
+    }
+}
+
+fn is_quit_shortcut(key: &KeyEvent) -> bool {
+    key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL)
 }
 
 fn request_translation(app: &mut App, tx: &Sender<TranslationRequest>) {
@@ -459,6 +469,7 @@ fn cleanup_terminal(cleaned: &AtomicBool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use petit_core::config::GlossaryConfig;
 
     #[test]
     fn translate_shortcuts_match_expected_keys() {
@@ -489,6 +500,45 @@ mod tests {
     }
 
     #[test]
+    fn quit_shortcuts_match_expected_keys() {
+        let ctrl_q = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL);
+        let q = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
+
+        assert!(is_quit_shortcut(&ctrl_q));
+        assert!(!is_quit_shortcut(&q));
+    }
+
+    #[test]
+    fn quit_shortcut_sets_should_quit() {
+        let (tx, _rx) = mpsc::channel();
+        let mut app = App::default();
+
+        handle_key_event(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL),
+            &tx,
+        );
+
+        assert!(app.should_quit);
+    }
+
+    #[test]
+    fn shutdown_worker_does_not_block_on_running_thread() {
+        let (tx, _rx) = mpsc::channel();
+        let start = std::time::Instant::now();
+        let worker = thread::spawn(|| {
+            thread::sleep(Duration::from_millis(250));
+        });
+
+        shutdown_worker(tx, worker);
+
+        assert!(
+            start.elapsed() < Duration::from_millis(100),
+            "shutdown should detach a still-running worker instead of blocking"
+        );
+    }
+
+    #[test]
     fn worker_reports_init_failure_when_model_missing() {
         let missing_model = std::env::temp_dir().join(format!(
             "petit-missing-model-{}-{}.gguf",
@@ -502,6 +552,7 @@ mod tests {
             threads: 1,
             log_to_file: false,
             log_path: std::path::PathBuf::from("logs/test-llama.log"),
+            glossary: Default::default(),
         };
 
         let (tx, rx, worker) = start_translation_worker(config);
@@ -526,5 +577,131 @@ mod tests {
 
         drop(tx);
         worker.join().expect("worker thread should exit cleanly");
+    }
+
+    #[test]
+    fn worker_reports_glossary_failure_before_missing_model() {
+        let missing_model = std::env::temp_dir().join(format!(
+            "petit-missing-model-{}-{}.gguf",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let missing_glossary = std::env::temp_dir().join(format!(
+            "petit-missing-glossary-{}-{}.tsv",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let model_dir = std::env::temp_dir().join(format!(
+            "petit-glossary-embedding-model-{}-{}",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let config = Config {
+            model_path: missing_model,
+            gpu_layers: 0,
+            context_size: 2048,
+            threads: 1,
+            log_to_file: false,
+            log_path: std::path::PathBuf::from("logs/test-llama.log"),
+            glossary: GlossaryConfig {
+                enabled: true,
+                path: missing_glossary,
+                embedding_model_dir: model_dir,
+                max_matches: 4,
+            },
+        };
+
+        let (tx, rx, worker) = start_translation_worker(config);
+
+        let first = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("worker should emit initializing event");
+        assert!(matches!(first, WorkerEvent::TranslatorInitializing));
+
+        let second = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("worker should emit init failure");
+        match second {
+            WorkerEvent::TranslatorInitFailed(err) => {
+                assert!(
+                    err.contains("missing glossary file"),
+                    "unexpected error: {err}"
+                );
+            }
+            other => panic!("unexpected worker event: {other:?}"),
+        }
+
+        drop(tx);
+        worker.join().expect("worker thread should exit cleanly");
+    }
+
+    #[test]
+    fn worker_reports_missing_embedding_model_before_missing_model() {
+        let missing_model = std::env::temp_dir().join(format!(
+            "petit-missing-model-{}-{}.gguf",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let glossary_path = std::env::temp_dir().join(format!(
+            "petit-glossary-{}-{}.tsv",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        std::fs::write(
+            &glossary_path,
+            "source_lang\ttarget_lang\tsource_term\ttarget_term\nen\tfr\thello\tbonjour\n",
+        )
+        .expect("test glossary file should be writable");
+        let model_dir = std::env::temp_dir().join(format!(
+            "petit-glossary-empty-model-{}-{}",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let _ = std::fs::remove_dir_all(&model_dir);
+        std::fs::create_dir_all(&model_dir).expect("test model dir should be writable");
+
+        let config = Config {
+            model_path: missing_model,
+            gpu_layers: 0,
+            context_size: 2048,
+            threads: 1,
+            log_to_file: false,
+            log_path: std::path::PathBuf::from("logs/test-llama.log"),
+            glossary: GlossaryConfig {
+                enabled: true,
+                path: glossary_path.clone(),
+                embedding_model_dir: model_dir.clone(),
+                max_matches: 4,
+            },
+        };
+
+        let (tx, rx, worker) = start_translation_worker(config);
+
+        let first = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("worker should emit initializing event");
+        assert!(matches!(first, WorkerEvent::TranslatorInitializing));
+
+        let second = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("worker should emit init failure");
+        match second {
+            WorkerEvent::TranslatorInitFailed(err) => {
+                assert!(
+                    err.contains("embeddinggemma-300m-ONNX"),
+                    "unexpected error: {err}"
+                );
+                assert!(
+                    err.contains(&model_dir.join("onnx/model.onnx").display().to_string()),
+                    "unexpected error: {err}"
+                );
+            }
+            other => panic!("unexpected worker event: {other:?}"),
+        }
+
+        drop(tx);
+        worker.join().expect("worker thread should exit cleanly");
+        let _ = std::fs::remove_file(glossary_path);
+        let _ = std::fs::remove_dir_all(model_dir);
     }
 }

@@ -27,6 +27,26 @@ default_source = "en"
 # Default target language (ISO 639-1)
 default_target = "fr"
 
+[glossary]
+# Disabled by default.
+enabled = false
+
+# Local glossary TSV file used when glossary constraints are enabled.
+path = "config/glossary.tsv"
+
+# Path to the local EmbeddingGemma model directory.
+# Expected files:
+# - onnx/model.onnx
+# - onnx/model.onnx_data
+# - tokenizer.json
+# - config.json
+# - special_tokens_map.json
+# - tokenizer_config.json
+embedding_model_dir = "models/embeddinggemma-300m-ONNX"
+
+# Maximum glossary candidates injected into the prompt.
+max_matches = 6
+
 [ui]
 # Show language codes instead of full names
 compact_lang_display = false

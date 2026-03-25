@@ -2,12 +2,10 @@
 
 ## Overview
 
-**petit_trad** is a cross-platform translation tool powered by
-Google's TranslateGemma model (released January 2026).
-TranslateGemma is a family of dedicated translation models available in 4B,
-12B, and 27B parameter sizes.
-The tool runs inference locally without relying on cloud APIs
-or serving frameworks like Ollama.
+**petit_trad** is a cross-platform translation tool powered by Google's TranslateGemma model
+(released January 2026). TranslateGemma is a family of dedicated translation models available in 4B,
+12B, and 27B parameter sizes. The tool runs inference locally without relying on cloud APIs or
+serving frameworks like Ollama.
 
 ---
 
@@ -19,8 +17,8 @@ Chosen over C++ for:
 
 - **Memory safety** without runtime overhead
 - **Cargo** — superior cross-platform build system vs CMake complexity
-- **Ecosystem** — `ratatui` (17.5k stars) is the de facto TUI standard;
-  `llama-cpp-2` provides battle-tested llama.cpp bindings
+- **Ecosystem** — `ratatui` (17.5k stars) is the de facto TUI standard; `llama-cpp-2` provides
+  battle-tested llama.cpp bindings
 - **Future-proof** — Tauri enables native GUI with web frontend sharing the same Rust core
 
 ### Inference: llama-cpp-2
@@ -30,6 +28,15 @@ Rust bindings to llama.cpp:
 - Supports GGUF quantized models
 - Backends: CUDA, Metal, Vulkan, CPU (AVX/NEON)
 - Alternative: `candle` (pure Rust, Hugging Face) for scenarios avoiding FFI
+
+### Glossary Retrieval: fastembed + hnsw_rs
+
+Used for optional glossary-constrained translation:
+
+- `fastembed` provides local text embeddings
+- `EmbeddingGemma300M` is the fixed v1 embedding model
+- `hnsw_rs` provides an in-process HNSW approximate nearest-neighbor index
+- indices are partitioned by normalized source/target language pair
 
 ### Model Selection: TranslateGemma
 
@@ -59,7 +66,7 @@ Rust bindings to llama.cpp:
 
 ## Project Structure
 
-```
+```bash
 petit_trad/
 ├── AGENTS.md                  # Agent operating rules and doc map
 ├── ARCHITECTURE.md            # Top-level architecture overview
@@ -93,6 +100,7 @@ flowchart TB
 
     subgraph core["petit-core"]
         tr["Translator trait"]
+        gs["GlossaryStore"]
         mm["ModelManager"]
     end
 
@@ -100,10 +108,18 @@ flowchart TB
         lc["llama-cpp-2 / candle (GGUF, CUDA/Metal/CPU)"]
     end
 
+    subgraph retrieve["Glossary Retrieval"]
+        fe["fastembed (EmbeddingGemma300M)"]
+        hv["hnsw_rs"]
+    end
+
     tui --> core
     srv --> core
     gui --> core
     core --> infer
+    tr --> gs
+    gs --> fe
+    gs --> hv
 ```
 
 ---
@@ -129,6 +145,14 @@ pub struct Config {
     pub threads: u32,           // CPU threads for inference
     pub log_to_file: bool,      // Write llama.cpp logs to a file
     pub log_path: PathBuf,      // Log file path (if enabled)
+    pub glossary: GlossaryConfig, // Optional glossary retrieval config
+}
+
+pub struct GlossaryConfig {
+    pub enabled: bool,
+    pub path: PathBuf,
+    pub embedding_model_dir: PathBuf,
+    pub max_matches: usize,
 }
 ```
 
@@ -166,9 +190,23 @@ pub struct Config {
 
 ### Configuration Precedence
 
-```
+```bash
 CLI args > Environment vars > Config file > Defaults
 ```
+
+The glossary subsystem follows the same precedence rules and lives in `petit-core` so that all
+frontends share one retrieval and prompt path.
+
+### Optional Glossary Retrieval
+
+- Glossary retrieval is optional and disabled by default.
+- When enabled, `petit-core` loads glossary TSV entries, creates `EmbeddingGemma300M` embeddings
+  with `fastembed`, and builds one HNSW index per normalized language pair.
+- The embedding model is user-managed under `models/` and loaded from an explicit local directory;
+  glossary startup must not download model assets automatically.
+- Translation requests query the pair-specific index, promote exact substring matches ahead of
+  ANN-only matches, and inject a compact glossary block into the TranslateGemma prompt.
+- If glossary config is invalid, translator startup fails fast.
 
 ---
 

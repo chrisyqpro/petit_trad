@@ -1,7 +1,7 @@
 # Architecture
 
-This document is the bird's-eye view of how the codebase is structured.
-It describes stable component boundaries and data flow.
+This document is the bird's-eye view of how the codebase is structured. It describes stable
+component boundaries and data flow.
 
 This document is not a roadmap, task tracker, or feature backlog.
 
@@ -16,7 +16,7 @@ This document is not a roadmap, task tracker, or feature backlog.
 Runtime assets:
 
 - `config/default.toml`: baseline settings
-- `models/` (user-managed): local GGUF model files
+- `models/` (user-managed): local GGUF and glossary embedding model files
 
 ## Component Responsibilities
 
@@ -27,10 +27,18 @@ Owns translation logic and model runtime concerns:
 - config and error types
 - language normalization/validation
 - prompt construction for TranslateGemma
+- optional glossary retrieval and prompt augmentation
 - model loading and token generation through `llama-cpp-2`
 
-`petit-core` is the backend boundary. Frontends should use its public API
-(`Translator`, `Config`, `Error`) instead of reimplementing inference logic.
+Glossary retrieval also lives in `petit-core`:
+
+- glossary TSV parsing and validation
+- EmbeddingGemma300M embedding generation through `fastembed`
+- per-language-pair HNSW indices through `hnsw_rs`
+- deterministic glossary candidate selection
+
+`petit-core` is the backend boundary. Frontends should use its public API (`Translator`, `Config`,
+`Error`) instead of reimplementing inference logic.
 
 ### `petit-tui`
 
@@ -47,9 +55,11 @@ Owns terminal UX and request orchestration:
 
 1. `petit-tui` gathers text/language/config from CLI, env, config file, and UI.
 2. A worker thread owns a `GemmaTranslator` instance from `petit-core`.
-3. `GemmaTranslator` validates language pair, builds prompt, calls inference.
-4. `ModelManager` performs tokenization, decode loop, sampling, and detokenization.
-5. Result text returns to `petit-tui` for display or stdout output.
+3. `GemmaTranslator` validates language pair and resolves glossary candidates when glossary support
+   is enabled.
+4. `GemmaTranslator` builds the final prompt and calls inference.
+5. `ModelManager` performs tokenization, decode loop, sampling, and detokenization.
+6. Result text returns to `petit-tui` for display or stdout output.
 
 ## Architectural Invariants
 

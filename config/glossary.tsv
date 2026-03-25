@@ -1,0 +1,20 @@
+source_lang	target_lang	source_term	target_term	note
+en	fr	hello	bonjour	basic greeting
+en	fr	account balance	solde du compte	banking terminology
+en	fr	savings account	compte d'epargne	banking terminology
+en	fr	wire transfer	virement bancaire	payments terminology
+en	fr	statement	releve de compte	banking terminology
+en	fr	bill	facture	billing terminology
+en	fr	bond	obligation	capital markets terminology
+en	fr	charge	frais	billing terminology
+en	fr	consideration	contrepartie	legal terminology
+en	fr	default	defaut de paiement	credit risk terminology
+en	fr	premium	prime	insurance terminology
+en	fr	security	titre	capital markets terminology
+en	de	hello	hallo	basic greeting
+en	de	account balance	Kontostand	banking terminology
+en	de	statement	Kontoauszug	banking terminology
+en	de	bill	Rechnung	billing terminology
+en	de	bond	Anleihe	capital markets terminology
+en	de	default	Zahlungsausfall	credit risk terminology
+en	de	security	Wertpapier	capital markets terminology

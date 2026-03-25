@@ -49,7 +49,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: petit-${{ matrix.target.name }}
-          path: petit-${{ github.ref_name }}-${{ matrix.target.name }}.${{ matrix.target.archive_ext }}
+          path:
+            petit-${{ github.ref_name }}-${{ matrix.target.name }}.${{ matrix.target.archive_ext }}
 
   publish:
     name: Publish GitHub Release

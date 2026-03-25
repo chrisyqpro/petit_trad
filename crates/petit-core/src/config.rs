@@ -5,8 +5,28 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+/// Configuration for glossary-constrained translation
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct GlossaryConfig {
+    /// Enable glossary retrieval
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Path to the glossary TSV file
+    #[serde(default)]
+    pub path: PathBuf,
+
+    /// Path to the local embedding model directory
+    #[serde(default)]
+    pub embedding_model_dir: PathBuf,
+
+    /// Maximum glossary candidates to inject into the prompt
+    #[serde(default)]
+    pub max_matches: usize,
+}
+
 /// Configuration for the translation engine
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Config {
     /// Path to the GGUF model file
     pub model_path: PathBuf,
@@ -25,6 +45,10 @@ pub struct Config {
 
     /// Path to the log file when log_to_file is enabled
     pub log_path: PathBuf,
+
+    /// Glossary configuration
+    #[serde(default)]
+    pub glossary: GlossaryConfig,
 }
 
 impl Config {
@@ -74,6 +98,7 @@ log_path = "logs/llama.log"
         assert_eq!(config.threads, 4);
         assert!(!config.log_to_file);
         assert_eq!(config.log_path, PathBuf::from("logs/llama.log"));
+        assert_eq!(config.glossary, GlossaryConfig::default());
     }
 
     #[test]
@@ -85,6 +110,12 @@ log_path = "logs/llama.log"
             threads: 8,
             log_to_file: true,
             log_path: PathBuf::from("/tmp/llama.log"),
+            glossary: GlossaryConfig {
+                enabled: true,
+                path: PathBuf::from("/tmp/glossary.tsv"),
+                embedding_model_dir: PathBuf::from("/tmp/models/embeddinggemma-300m-ONNX"),
+                max_matches: 4,
+            },
         };
 
         let toml_str = config.to_toml().expect("serialize should succeed");
@@ -123,6 +154,65 @@ log_path = "/var/log/petit/llama.log"
         assert_eq!(config.threads, 16);
         assert!(config.log_to_file);
         assert_eq!(config.log_path, PathBuf::from("/var/log/petit/llama.log"));
+        assert_eq!(config.glossary, GlossaryConfig::default());
+    }
+
+    #[test]
+    fn test_parse_glossary_toml_roundtrip() {
+        let toml_str = r#"
+model_path = "/models/translategemma-12b-it.gguf"
+gpu_layers = 16
+context_size = 2048
+threads = 4
+log_to_file = false
+log_path = "/var/log/petit/llama.log"
+
+[glossary]
+enabled = true
+path = "config/glossary.tsv"
+embedding_model_dir = "models/embeddinggemma-300m-ONNX"
+max_matches = 6
+"#;
+
+        let config = Config::from_toml(toml_str).expect("parse should succeed");
+        assert!(config.glossary.enabled);
+        assert_eq!(config.glossary.path, PathBuf::from("config/glossary.tsv"));
+        assert_eq!(
+            config.glossary.embedding_model_dir,
+            PathBuf::from("models/embeddinggemma-300m-ONNX")
+        );
+        assert_eq!(config.glossary.max_matches, 6);
+
+        let roundtrip = config.to_toml().expect("serialize should succeed");
+        let reparsed = Config::from_toml(&roundtrip).expect("roundtrip parse should succeed");
+        assert_eq!(config, reparsed);
+    }
+
+    #[test]
+    fn test_parse_disabled_glossary_toml() {
+        let toml_str = r#"
+model_path = "/models/translategemma-12b-it.gguf"
+gpu_layers = 32
+context_size = 4096
+threads = 8
+log_to_file = true
+log_path = "/tmp/llama.log"
+
+[glossary]
+enabled = false
+path = "config/glossary.tsv"
+embedding_model_dir = "models/embeddinggemma-300m-ONNX"
+max_matches = 0
+"#;
+
+        let config = Config::from_toml(toml_str).expect("parse should succeed");
+        assert!(!config.glossary.enabled);
+        assert_eq!(config.glossary.path, PathBuf::from("config/glossary.tsv"));
+        assert_eq!(
+            config.glossary.embedding_model_dir,
+            PathBuf::from("models/embeddinggemma-300m-ONNX")
+        );
+        assert_eq!(config.glossary.max_matches, 0);
     }
 
     #[test]

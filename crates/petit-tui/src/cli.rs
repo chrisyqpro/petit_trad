@@ -21,13 +21,21 @@ pub struct CliArgs {
     pub benchmark_warmup_runs: Option<u32>,
     pub benchmark_runs: Option<u32>,
     pub benchmark_max_new_tokens: Option<u32>,
+    pub glossary_enabled: Option<bool>,
+    pub glossary_path: Option<PathBuf>,
+    pub glossary_embedding_model_dir: Option<PathBuf>,
+    pub glossary_max_matches: Option<usize>,
     pub show_version: bool,
     pub show_help: bool,
 }
 
 impl CliArgs {
     pub fn parse() -> Result<Self> {
-        let mut args = std::env::args().skip(1);
+        Self::parse_from(std::env::args().skip(1))
+    }
+
+    pub fn parse_from(args: impl IntoIterator<Item = String>) -> Result<Self> {
+        let mut args = args.into_iter();
         let mut cli = CliArgs::default();
 
         while let Some(arg) = args.next() {
@@ -57,6 +65,19 @@ impl CliArgs {
                 "--runs" => cli.benchmark_runs = Some(parse_u32(&mut args, "--runs")?),
                 "--max-new-tokens" => {
                     cli.benchmark_max_new_tokens = Some(parse_u32(&mut args, "--max-new-tokens")?)
+                }
+                "--glossary" => set_glossary_enabled(&mut cli, true)?,
+                "--no-glossary" => set_glossary_enabled(&mut cli, false)?,
+                "--glossary-path" => {
+                    cli.glossary_path = Some(parse_path(&mut args, "--glossary-path")?)
+                }
+                "--glossary-embedding-model-dir" => {
+                    cli.glossary_embedding_model_dir =
+                        Some(parse_path(&mut args, "--glossary-embedding-model-dir")?)
+                }
+                "--glossary-max-matches" => {
+                    cli.glossary_max_matches =
+                        Some(parse_usize(&mut args, "--glossary-max-matches")?)
                 }
                 "--version" | "-V" => cli.show_version = true,
                 "--help" | "-h" => cli.show_help = true,
@@ -93,6 +114,11 @@ impl CliArgs {
             "  --warmup-runs <n>      Warmup runs before measured runs (benchmark mode)\n",
             "  --runs <n>             Measured benchmark runs (benchmark mode)\n",
             "  --max-new-tokens <n>   Max output tokens for benchmark run (benchmark mode)\n",
+            "  --glossary             Enable glossary-constrained translation\n",
+            "  --no-glossary          Disable glossary-constrained translation\n",
+            "  --glossary-path <path> Path to glossary TSV file\n",
+            "  --glossary-embedding-model-dir <path> Glossary embedding model directory\n",
+            "  --glossary-max-matches <n> Max glossary candidates to inject\n",
             "  --version, -V          Print version\n",
             "  --help, -h             Print help\n"
         )
@@ -113,4 +139,76 @@ fn parse_u32(args: &mut impl Iterator<Item = String>, name: &str) -> Result<u32>
     value
         .parse::<u32>()
         .map_err(|_| anyhow!("Invalid value for {name}: {value}"))
+}
+
+fn parse_usize(args: &mut impl Iterator<Item = String>, name: &str) -> Result<usize> {
+    let value = parse_string(args, name)?;
+    value
+        .parse::<usize>()
+        .map_err(|_| anyhow!("Invalid value for {name}: {value}"))
+}
+
+fn set_glossary_enabled(cli: &mut CliArgs, enabled: bool) -> Result<()> {
+    if let Some(existing) = cli.glossary_enabled {
+        if existing != enabled {
+            return Err(anyhow!(
+                "Conflicting glossary flags: --glossary and --no-glossary"
+            ));
+        }
+        return Ok(());
+    }
+
+    cli.glossary_enabled = Some(enabled);
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    #[test]
+    fn usage_lists_glossary_flags() {
+        let usage = CliArgs::usage();
+        assert!(usage.contains("--glossary"));
+        assert!(usage.contains("--no-glossary"));
+        assert!(usage.contains("--glossary-path"));
+        assert!(usage.contains("--glossary-embedding-model-dir"));
+        assert!(usage.contains("--glossary-max-matches"));
+    }
+
+    #[test]
+    fn parse_accepts_glossary_flags_and_values() {
+        let cli = CliArgs::parse_from(args(&[
+            "--glossary",
+            "--glossary-path",
+            "/tmp/glossary.tsv",
+            "--glossary-embedding-model-dir",
+            "/tmp/models/embeddinggemma-300m-ONNX",
+            "--glossary-max-matches",
+            "6",
+        ]))
+        .expect("glossary flags should parse");
+
+        assert_eq!(cli.glossary_enabled, Some(true));
+        assert_eq!(cli.glossary_path, Some(PathBuf::from("/tmp/glossary.tsv")));
+        assert_eq!(
+            cli.glossary_embedding_model_dir,
+            Some(PathBuf::from("/tmp/models/embeddinggemma-300m-ONNX"))
+        );
+        assert_eq!(cli.glossary_max_matches, Some(6));
+    }
+
+    #[test]
+    fn parse_rejects_conflicting_glossary_flags() {
+        let err = CliArgs::parse_from(args(&["--glossary", "--no-glossary"]))
+            .expect_err("conflicting flags should be rejected");
+        assert!(
+            err.to_string().contains("cannot") || err.to_string().contains("glossary"),
+            "unexpected error: {err}"
+        );
+    }
 }

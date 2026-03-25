@@ -8,12 +8,14 @@
 pub mod config;
 pub mod error;
 pub mod gemma;
+pub mod glossary;
 pub mod language;
 pub mod model_manager;
 
 pub use config::Config;
 pub use error::Error;
 pub use gemma::GemmaTranslator;
+pub use glossary::{GlossaryCandidate, GlossaryStore};
 pub use model_manager::ModelManager;
 
 /// Result type for petit-core operations
