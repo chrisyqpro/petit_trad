@@ -55,8 +55,8 @@ Owns terminal UX and request orchestration:
 
 1. `petit-tui` gathers text/language/config from CLI, env, config file, and UI.
 2. A worker thread owns a `GemmaTranslator` instance from `petit-core`.
-3. `GemmaTranslator` validates language pair and resolves glossary candidates when glossary support
-   is enabled.
+3. `GemmaTranslator` validates the target language, accepts either an explicit source language or
+   the source sentinel `auto`, and resolves glossary candidates when glossary support is enabled.
 4. `GemmaTranslator` builds the final prompt and calls inference.
 5. `ModelManager` performs tokenization, decode loop, sampling, and detokenization.
 6. Result text returns to `petit-tui` for display or stdout output.
@@ -68,6 +68,7 @@ Owns terminal UX and request orchestration:
 - UI code stays inside frontend crates (`petit-tui`, future frontends).
 - Config precedence is `CLI > env > config file > defaults`.
 - Prompt format for TranslateGemma follows `docs/design-docs/prompt-format.md`.
+- `auto` is a reserved source-only value; target language remains explicit.
 
 ## Deeper Reading
 

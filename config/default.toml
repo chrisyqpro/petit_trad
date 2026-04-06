@@ -21,8 +21,8 @@ log_to_file = false
 log_path = "logs/llama.log"
 
 [translation]
-# Default source language (ISO 639-1)
-default_source = "en"
+# Default source language (ISO 639-1 or auto sentinel)
+default_source = "auto"
 
 # Default target language (ISO 639-1)
 default_target = "fr"

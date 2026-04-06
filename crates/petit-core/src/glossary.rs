@@ -3,7 +3,7 @@
 //! Glossary constraint subsystem.
 
 use crate::config::GlossaryConfig;
-use crate::language::normalize_lang;
+use crate::language::{is_auto_source, normalize_lang};
 use crate::{Error, Result};
 use csv::{ReaderBuilder, StringRecord};
 use fastembed::{
@@ -76,6 +76,12 @@ struct GlossaryEntry {
     source_term: String,
     target_term: String,
     source_term_norm: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CandidateKind {
+    Exact,
+    Ann,
 }
 
 trait EmbeddingProvider: Send + Sync {
@@ -166,11 +172,8 @@ impl GlossaryStore {
             None => return Ok(Vec::new()),
         };
 
-        let key = lang_pair_key(source_lang, target_lang);
-        let index = match self.pair_indices.get(&key) {
-            Some(index) => index,
-            None => return Ok(Vec::new()),
-        };
+        let normalized_source_lang = normalize_lang(source_lang);
+        let normalized_target_lang = normalize_lang(target_lang);
 
         let normalized_source_text = normalize_source_text(source_text);
         if normalized_source_text.is_empty() {
@@ -179,50 +182,127 @@ impl GlossaryStore {
 
         let query_embedding = provider.embed_query(source_text)?;
 
-        let mut exact = Vec::new();
-        for entry in &index.entries {
-            if normalized_source_text.contains(&entry.source_term_norm) {
-                exact.push(RankedCandidate::from_exact(entry));
-            }
-        }
-        exact.sort_by(compare_exact_candidates);
-
-        let mut ann = Vec::new();
-        if !index.entries.is_empty() {
-            let knbn = ANN_SEARCH_K.min(index.entries.len()).max(1);
-            let ef = ANN_SEARCH_EF.max(knbn + 1);
-            let neighbours = index.hnsw.search(query_embedding.as_slice(), knbn, ef);
-
-            for neighbour in neighbours {
-                let origin_id = neighbour.get_origin_id();
-                let Some(entry) = index.entries.get(origin_id) else {
-                    return Err(Error::GlossaryIndexBuild(format!(
-                        "search returned invalid origin id: {origin_id}"
-                    )));
-                };
-
-                let similarity = 1.0 - neighbour.get_distance();
-                if similarity >= ANN_SIMILARITY_THRESHOLD {
-                    ann.push(RankedCandidate::from_ann(entry, similarity));
-                }
-            }
+        if is_auto_source(&normalized_source_lang) {
+            return self.select_candidates_for_auto_source(
+                &normalized_target_lang,
+                &normalized_source_text,
+                query_embedding.as_slice(),
+            );
         }
 
-        ann.sort_by(compare_ann_candidates);
+        let key = lang_pair_key(&normalized_source_lang, &normalized_target_lang);
+        let index = match self.pair_indices.get(&key) {
+            Some(index) => index,
+            None => return Ok(Vec::new()),
+        };
 
-        let mut shortlist = Vec::new();
-        let mut seen_terms = HashSet::new();
-        for candidate in exact.into_iter().chain(ann.into_iter()) {
-            if seen_terms.insert(candidate.source_term_norm.clone()) {
-                shortlist.push(candidate.into_public());
-                if shortlist.len() == self.max_matches {
-                    break;
-                }
-            }
-        }
+        let ranked_candidates = collect_ranked_candidates(
+            index,
+            normalized_source_text.as_str(),
+            query_embedding.as_slice(),
+        )?;
 
-        Ok(shortlist)
+        Ok(shortlist_ranked_candidates(
+            ranked_candidates,
+            self.max_matches,
+        ))
     }
+
+    fn select_candidates_for_auto_source(
+        &self,
+        target_lang: &str,
+        normalized_source_text: &str,
+        query_embedding: &[f32],
+    ) -> Result<Vec<GlossaryCandidate>> {
+        let mut matching_pairs = self
+            .pair_indices
+            .iter()
+            .filter(|((_, pair_target_lang), _)| pair_target_lang == target_lang)
+            .map(|(pair_key, index)| (pair_key.clone(), index))
+            .collect::<Vec<_>>();
+        if matching_pairs.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        matching_pairs.sort_by(|(left_key, _), (right_key, _)| left_key.cmp(right_key));
+
+        let mut ranked_candidates = Vec::new();
+        for (pair_key, index) in matching_pairs {
+            ranked_candidates.extend(
+                collect_ranked_candidates(index, normalized_source_text, query_embedding)?
+                    .into_iter()
+                    .map(|candidate| AutoRankedCandidate {
+                        pair_key: pair_key.clone(),
+                        candidate,
+                    }),
+            );
+        }
+
+        ranked_candidates.sort_by(compare_auto_ranked_candidates);
+
+        Ok(shortlist_ranked_candidates(
+            ranked_candidates
+                .into_iter()
+                .map(|ranked_candidate| ranked_candidate.candidate),
+            self.max_matches,
+        ))
+    }
+}
+
+fn collect_ranked_candidates(
+    index: &PairGlossaryIndex,
+    normalized_source_text: &str,
+    query_embedding: &[f32],
+) -> Result<Vec<RankedCandidate>> {
+    let mut exact = Vec::new();
+    for entry in &index.entries {
+        if normalized_source_text.contains(&entry.source_term_norm) {
+            exact.push(RankedCandidate::from_exact(entry));
+        }
+    }
+    exact.sort_by(compare_exact_candidates);
+
+    let mut ann = Vec::new();
+    if !index.entries.is_empty() {
+        let knbn = ANN_SEARCH_K.min(index.entries.len()).max(1);
+        let ef = ANN_SEARCH_EF.max(knbn + 1);
+        let neighbours = index.hnsw.search(query_embedding, knbn, ef);
+
+        for neighbour in neighbours {
+            let origin_id = neighbour.get_origin_id();
+            let Some(entry) = index.entries.get(origin_id) else {
+                return Err(Error::GlossaryIndexBuild(format!(
+                    "search returned invalid origin id: {origin_id}"
+                )));
+            };
+
+            let similarity = 1.0 - neighbour.get_distance();
+            if similarity >= ANN_SIMILARITY_THRESHOLD {
+                ann.push(RankedCandidate::from_ann(entry, similarity));
+            }
+        }
+    }
+
+    ann.sort_by(compare_ann_candidates);
+    Ok(exact.into_iter().chain(ann).collect())
+}
+
+fn shortlist_ranked_candidates(
+    candidates: impl IntoIterator<Item = RankedCandidate>,
+    max_matches: usize,
+) -> Vec<GlossaryCandidate> {
+    let mut shortlist = Vec::new();
+    let mut seen_terms = HashSet::new();
+    for candidate in candidates {
+        if seen_terms.insert(candidate.source_term_norm.clone()) {
+            shortlist.push(candidate.into_public());
+            if shortlist.len() == max_matches {
+                break;
+            }
+        }
+    }
+
+    shortlist
 }
 
 fn load_embedding_model(model_dir: &Path) -> Result<UserDefinedEmbeddingModel> {
@@ -487,6 +567,7 @@ struct RankedCandidate {
     source_term: String,
     target_term: String,
     source_term_norm: String,
+    kind: CandidateKind,
     similarity: f32,
     exact_len: usize,
 }
@@ -497,6 +578,7 @@ impl RankedCandidate {
             source_term: entry.source_term.clone(),
             target_term: entry.target_term.clone(),
             source_term_norm: entry.source_term_norm.clone(),
+            kind: CandidateKind::Exact,
             similarity: 1.0,
             exact_len: entry.source_term_norm.len(),
         }
@@ -507,6 +589,7 @@ impl RankedCandidate {
             source_term: entry.source_term.clone(),
             target_term: entry.target_term.clone(),
             source_term_norm: entry.source_term_norm.clone(),
+            kind: CandidateKind::Ann,
             similarity,
             exact_len: entry.source_term_norm.len(),
         }
@@ -535,6 +618,30 @@ fn compare_ann_candidates(left: &RankedCandidate, right: &RankedCandidate) -> Or
         .unwrap_or(Ordering::Equal)
         .then_with(|| left.source_term.cmp(&right.source_term))
         .then_with(|| left.target_term.cmp(&right.target_term))
+}
+
+#[derive(Clone)]
+struct AutoRankedCandidate {
+    pair_key: LangPairKey,
+    candidate: RankedCandidate,
+}
+
+fn compare_auto_ranked_candidates(
+    left: &AutoRankedCandidate,
+    right: &AutoRankedCandidate,
+) -> Ordering {
+    match (left.candidate.kind, right.candidate.kind) {
+        (CandidateKind::Exact, CandidateKind::Ann) => Ordering::Less,
+        (CandidateKind::Ann, CandidateKind::Exact) => Ordering::Greater,
+        (CandidateKind::Exact, CandidateKind::Exact) => {
+            compare_exact_candidates(&left.candidate, &right.candidate)
+                .then_with(|| left.pair_key.cmp(&right.pair_key))
+        }
+        (CandidateKind::Ann, CandidateKind::Ann) => {
+            compare_ann_candidates(&left.candidate, &right.candidate)
+                .then_with(|| left.pair_key.cmp(&right.pair_key))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -715,6 +822,115 @@ en\tde\tbank account\tBankkonto\tbanking\n";
                 target_term: "Kontostand".into(),
             }]
         );
+    }
+
+    #[test]
+    fn glossary_select_candidates_auto_source_fans_out_across_matching_targets() {
+        let rows = vec![
+            GlossaryRow {
+                source_lang: "en".into(),
+                target_lang: "fr".into(),
+                source_term: "account balance".into(),
+                target_term: "solde du compte".into(),
+                note: None,
+                source_term_norm: normalize_source_text("account balance"),
+            },
+            GlossaryRow {
+                source_lang: "es".into(),
+                target_lang: "fr".into(),
+                source_term: "saldo de cuenta".into(),
+                target_term: "solde du compte es".into(),
+                note: None,
+                source_term_norm: normalize_source_text("saldo de cuenta"),
+            },
+            GlossaryRow {
+                source_lang: "it".into(),
+                target_lang: "fr".into(),
+                source_term: "saldo del conto".into(),
+                target_term: "solde du compte it".into(),
+                note: None,
+                source_term_norm: normalize_source_text("saldo del conto"),
+            },
+        ];
+        let provider = Arc::new(StubEmbeddingProvider::deterministic(
+            &[
+                ("account balance", &[1.0, 0.0]),
+                ("saldo de cuenta", &[0.0, 1.0]),
+                ("saldo del conto", &[0.5, 0.5]),
+            ],
+            &[1.0, 0.0],
+        ));
+        let store = build_store_from_rows(rows, provider, 2).expect("store should build");
+
+        let candidates = store
+            .select_candidates(
+                "auto",
+                "fr",
+                "account balance saldo de cuenta saldo del conto",
+            )
+            .expect("auto source should fan out");
+
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(candidates[0].source_term, "account balance");
+        assert_eq!(candidates[1].source_term, "saldo de cuenta");
+    }
+
+    #[test]
+    fn glossary_select_candidates_auto_source_ignores_non_matching_targets() {
+        let rows = vec![GlossaryRow {
+            source_lang: "en".into(),
+            target_lang: "fr".into(),
+            source_term: "account balance".into(),
+            target_term: "solde du compte".into(),
+            note: None,
+            source_term_norm: normalize_source_text("account balance"),
+        }];
+        let provider = Arc::new(StubEmbeddingProvider::deterministic(
+            &[("account balance", &[1.0, 0.0])],
+            &[1.0, 0.0],
+        ));
+        let store = build_store_from_rows(rows, provider, 4).expect("store should build");
+
+        let candidates = store
+            .select_candidates("auto", "de", "account balance")
+            .expect("auto source should not invent candidates");
+
+        assert!(candidates.is_empty());
+    }
+
+    #[test]
+    fn glossary_select_candidates_auto_source_keeps_exact_matches_ahead_of_earlier_ann_hits() {
+        let rows = vec![
+            GlossaryRow {
+                source_lang: "de".into(),
+                target_lang: "fr".into(),
+                source_term: "alpha term".into(),
+                target_term: "terme alpha".into(),
+                note: None,
+                source_term_norm: normalize_source_text("alpha term"),
+            },
+            GlossaryRow {
+                source_lang: "en".into(),
+                target_lang: "fr".into(),
+                source_term: "beta term".into(),
+                target_term: "terme beta".into(),
+                note: None,
+                source_term_norm: normalize_source_text("beta term"),
+            },
+        ];
+        let provider = Arc::new(StubEmbeddingProvider::deterministic(
+            &[("alpha term", &[1.0, 0.0]), ("beta term", &[1.0, 0.0])],
+            &[1.0, 0.0],
+        ));
+        let store = build_store_from_rows(rows, provider, 1).expect("store should build");
+
+        let candidates = store
+            .select_candidates("auto", "fr", "beta term and nearby text")
+            .expect("auto source should merge deterministically");
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].source_term, "beta term");
+        assert_eq!(candidates[0].target_term, "terme beta");
     }
 
     #[test]

@@ -6,6 +6,9 @@
 
 use crate::{Error, Result};
 
+/// Reserved source-language sentinel that asks the model to infer the source itself.
+pub const AUTO_SOURCE_LANG: &str = "auto";
+
 /// Supported ISO 639-1 language codes for TranslateGemma
 ///
 /// Based on the TranslateGemma model card (google/translategemma-12b-it).
@@ -77,6 +80,11 @@ pub fn normalize_lang(code: &str) -> String {
     code.to_lowercase()
 }
 
+/// Check whether a normalized or raw language value is the reserved `auto` source sentinel.
+pub fn is_auto_source(code: &str) -> bool {
+    normalize_lang(code) == AUTO_SOURCE_LANG
+}
+
 /// Extract the base language code from a potentially regional code.
 ///
 /// Examples:
@@ -101,7 +109,7 @@ pub fn is_supported(code: &str) -> bool {
 ///
 /// Returns an error if either language is unsupported.
 pub fn validate_pair(source: &str, target: &str) -> Result<()> {
-    if !is_supported(source) {
+    if !is_auto_source(source) && !is_supported(source) {
         return Err(Error::UnsupportedLanguage(source.to_string()));
     }
     if !is_supported(target) {
@@ -131,6 +139,13 @@ mod tests {
         assert_eq!(normalize_lang("en-US"), "en-us");
         assert_eq!(normalize_lang("pt-BR"), "pt-br");
         assert_eq!(normalize_lang("zh-TW"), "zh-tw");
+    }
+
+    #[test]
+    fn test_is_auto_source() {
+        assert!(is_auto_source("auto"));
+        assert!(is_auto_source("AUTO"));
+        assert!(!is_auto_source("en"));
     }
 
     #[test]
@@ -175,6 +190,7 @@ mod tests {
         assert!(validate_pair("en", "fr").is_ok());
         assert!(validate_pair("EN", "FR").is_ok());
         assert!(validate_pair("en-US", "de-DE").is_ok());
+        assert!(validate_pair("auto", "fr").is_ok());
     }
 
     #[test]
@@ -189,6 +205,13 @@ mod tests {
         let result = validate_pair("en", "yy");
         assert!(result.is_err());
         assert!(matches!(result, Err(Error::UnsupportedLanguage(code)) if code == "yy"));
+    }
+
+    #[test]
+    fn test_validate_pair_invalid_auto_target() {
+        let result = validate_pair("en", "auto");
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::UnsupportedLanguage(code)) if code == "auto"));
     }
 
     #[test]

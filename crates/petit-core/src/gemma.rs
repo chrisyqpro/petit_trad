@@ -2,11 +2,50 @@
 
 //! GemmaTranslator implementation for TranslateGemma models
 
-use crate::language::{normalize_lang, supported_languages, validate_pair};
+use crate::language::{is_auto_source, normalize_lang, supported_languages, validate_pair};
 use crate::{Config, GlossaryCandidate, GlossaryStore, ModelManager, Result, Translator};
 
 /// Default maximum tokens for translation output
 const DEFAULT_MAX_NEW_TOKENS: u32 = 256;
+const TRANSLATION_ONLY_INSTRUCTION: &str = "Return only the translation of source text.\nDo not explain the source language.\nDo not add notes, quotes, or extra formatting.";
+
+fn append_glossary_terms(prompt: &mut String, glossary_terms: &[(&str, &str)]) {
+    if glossary_terms.is_empty() {
+        return;
+    }
+
+    prompt.push_str("Use the glossary terms exactly when they match the source text:\n");
+    for (source_term, target_term) in glossary_terms {
+        prompt.push_str(&format!("- {source_term} -> {target_term}\n"));
+    }
+}
+
+fn build_explicit_prompt(
+    text: &str,
+    source_lang: &str,
+    target_lang: &str,
+    glossary_terms: &[(&str, &str)],
+) -> String {
+    let mut prompt = format!(
+        "<start_of_turn>user\n[{source_lang}->{target_lang}]\n{TRANSLATION_ONLY_INSTRUCTION}\n"
+    );
+    append_glossary_terms(&mut prompt, glossary_terms);
+    prompt.push_str("\nText:\n");
+    prompt.push_str(text);
+    prompt.push_str("<end_of_turn>\n<start_of_turn>model\n");
+    prompt
+}
+
+fn build_auto_prompt(text: &str, target_lang: &str, glossary_terms: &[(&str, &str)]) -> String {
+    let mut prompt = format!(
+        "<start_of_turn>user\nTranslate the text below into {target_lang}.\nInfer the source language from the text itself.\n{TRANSLATION_ONLY_INSTRUCTION}\n"
+    );
+    append_glossary_terms(&mut prompt, glossary_terms);
+    prompt.push_str("\nText:\n");
+    prompt.push_str(text);
+    prompt.push_str("<end_of_turn>\n<start_of_turn>model\n");
+    prompt
+}
 
 fn build_prompt(
     text: &str,
@@ -16,22 +55,11 @@ fn build_prompt(
 ) -> String {
     let src = normalize_lang(source_lang);
     let tgt = normalize_lang(target_lang);
-    if glossary_terms.is_empty() {
-        return format!(
-            "<start_of_turn>user\n[{src}->{tgt}] {text}<end_of_turn>\n<start_of_turn>model\n"
-        );
+    if is_auto_source(&src) {
+        return build_auto_prompt(text, &tgt, glossary_terms);
     }
 
-    let mut prompt = format!(
-        "<start_of_turn>user\n[{src}->{tgt}]\nUse the glossary terms exactly when they match the source text:\n"
-    );
-    for (source_term, target_term) in glossary_terms {
-        prompt.push_str(&format!("- {source_term} -> {target_term}\n"));
-    }
-    prompt.push_str(&format!(
-        "\nText:\n{text}<end_of_turn>\n<start_of_turn>model\n"
-    ));
-    prompt
+    build_explicit_prompt(text, &src, &tgt, glossary_terms)
 }
 
 fn build_prompt_with_lookup<F>(
@@ -147,7 +175,7 @@ mod tests {
         let prompt = build_prompt("Hello, how are you?", "en", "fr", &[]);
         assert_eq!(
             prompt,
-            "<start_of_turn>user\n[en->fr] Hello, how are you?<end_of_turn>\n<start_of_turn>model\n"
+            "<start_of_turn>user\n[en->fr]\nReturn only the translation of source text.\nDo not explain the source language.\nDo not add notes, quotes, or extra formatting.\n\nText:\nHello, how are you?<end_of_turn>\n<start_of_turn>model\n"
         );
     }
 
@@ -159,7 +187,7 @@ mod tests {
         let prompt = build_prompt(text, &src, &tgt, &[]);
         assert_eq!(
             prompt,
-            "<start_of_turn>user\n[en->fr] Hello<end_of_turn>\n<start_of_turn>model\n"
+            "<start_of_turn>user\n[en->fr]\nReturn only the translation of source text.\nDo not explain the source language.\nDo not add notes, quotes, or extra formatting.\n\nText:\nHello<end_of_turn>\n<start_of_turn>model\n"
         );
     }
 
@@ -171,7 +199,16 @@ mod tests {
         let prompt = build_prompt(text, &src, &tgt, &[]);
         assert_eq!(
             prompt,
-            "<start_of_turn>user\n[en-us->pt-br] Good morning<end_of_turn>\n<start_of_turn>model\n"
+            "<start_of_turn>user\n[en-us->pt-br]\nReturn only the translation of source text.\nDo not explain the source language.\nDo not add notes, quotes, or extra formatting.\n\nText:\nGood morning<end_of_turn>\n<start_of_turn>model\n"
+        );
+    }
+
+    #[test]
+    fn test_build_prompt_auto_without_glossary() {
+        let prompt = build_prompt("Hello", "auto", "fr", &[]);
+        assert_eq!(
+            prompt,
+            "<start_of_turn>user\nTranslate the text below into fr.\nInfer the source language from the text itself.\nReturn only the translation of source text.\nDo not explain the source language.\nDo not add notes, quotes, or extra formatting.\n\nText:\nHello<end_of_turn>\n<start_of_turn>model\n"
         );
     }
 
@@ -180,7 +217,7 @@ mod tests {
         let prompt = build_prompt("Hello", "en", "fr", &[]);
         assert_eq!(
             prompt,
-            "<start_of_turn>user\n[en->fr] Hello<end_of_turn>\n<start_of_turn>model\n"
+            "<start_of_turn>user\n[en->fr]\nReturn only the translation of source text.\nDo not explain the source language.\nDo not add notes, quotes, or extra formatting.\n\nText:\nHello<end_of_turn>\n<start_of_turn>model\n"
         );
     }
 
@@ -198,7 +235,25 @@ mod tests {
 
         assert_eq!(
             prompt,
-            "<start_of_turn>user\n[en->fr]\nUse the glossary terms exactly when they match the source text:\n- account balance -> solde du compte\n- savings account -> compte d'epargne\n\nText:\nYour balance is available in the savings account.<end_of_turn>\n<start_of_turn>model\n"
+            "<start_of_turn>user\n[en->fr]\nReturn only the translation of source text.\nDo not explain the source language.\nDo not add notes, quotes, or extra formatting.\nUse the glossary terms exactly when they match the source text:\n- account balance -> solde du compte\n- savings account -> compte d'epargne\n\nText:\nYour balance is available in the savings account.<end_of_turn>\n<start_of_turn>model\n"
+        );
+    }
+
+    #[test]
+    fn test_build_prompt_auto_source_with_glossary_terms_includes_block() {
+        let prompt = build_prompt(
+            "Your balance is available in the savings account.",
+            "auto",
+            "fr",
+            &[
+                ("account balance", "solde du compte"),
+                ("savings account", "compte d'epargne"),
+            ],
+        );
+
+        assert_eq!(
+            prompt,
+            "<start_of_turn>user\nTranslate the text below into fr.\nInfer the source language from the text itself.\nReturn only the translation of source text.\nDo not explain the source language.\nDo not add notes, quotes, or extra formatting.\nUse the glossary terms exactly when they match the source text:\n- account balance -> solde du compte\n- savings account -> compte d'epargne\n\nText:\nYour balance is available in the savings account.<end_of_turn>\n<start_of_turn>model\n"
         );
     }
 
@@ -232,7 +287,7 @@ mod tests {
         assert_eq!(lookup_calls.get(), 1);
         assert_eq!(
             prompt,
-            "<start_of_turn>user\n[en->fr]\nUse the glossary terms exactly when they match the source text:\n- account balance -> solde du compte\n- savings account -> compte d'epargne\n\nText:\nYour balance is available in the savings account.<end_of_turn>\n<start_of_turn>model\n"
+            "<start_of_turn>user\n[en->fr]\nReturn only the translation of source text.\nDo not explain the source language.\nDo not add notes, quotes, or extra formatting.\nUse the glossary terms exactly when they match the source text:\n- account balance -> solde du compte\n- savings account -> compte d'epargne\n\nText:\nYour balance is available in the savings account.<end_of_turn>\n<start_of_turn>model\n"
         );
     }
 
@@ -257,7 +312,41 @@ mod tests {
         assert_eq!(lookup_calls.get(), 1);
         assert_eq!(
             prompt,
-            "<start_of_turn>user\n[en->fr] Hello<end_of_turn>\n<start_of_turn>model\n"
+            "<start_of_turn>user\n[en->fr]\nReturn only the translation of source text.\nDo not explain the source language.\nDo not add notes, quotes, or extra formatting.\n\nText:\nHello<end_of_turn>\n<start_of_turn>model\n"
+        );
+    }
+
+    #[test]
+    fn test_translate_uses_glossary_candidates_with_auto_source() {
+        let lookup_calls = Rc::new(Cell::new(0));
+        let lookup_calls_ref = Rc::clone(&lookup_calls);
+        let prompt = build_prompt_with_lookup(
+            "Your balance is available in the savings account.",
+            "auto",
+            "fr",
+            move |source_lang, target_lang, text| {
+                assert_eq!(source_lang, "auto");
+                assert_eq!(target_lang, "fr");
+                assert_eq!(text, "Your balance is available in the savings account.");
+                lookup_calls_ref.set(lookup_calls_ref.get() + 1);
+                Ok(vec![
+                    GlossaryCandidate {
+                        source_term: "account balance".into(),
+                        target_term: "solde du compte".into(),
+                    },
+                    GlossaryCandidate {
+                        source_term: "savings account".into(),
+                        target_term: "compte d'epargne".into(),
+                    },
+                ])
+            },
+        )
+        .expect("translation should build a prompt");
+
+        assert_eq!(lookup_calls.get(), 1);
+        assert_eq!(
+            prompt,
+            "<start_of_turn>user\nTranslate the text below into fr.\nInfer the source language from the text itself.\nReturn only the translation of source text.\nDo not explain the source language.\nDo not add notes, quotes, or extra formatting.\nUse the glossary terms exactly when they match the source text:\n- account balance -> solde du compte\n- savings account -> compte d'epargne\n\nText:\nYour balance is available in the savings account.<end_of_turn>\n<start_of_turn>model\n"
         );
     }
 

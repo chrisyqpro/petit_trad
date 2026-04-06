@@ -494,6 +494,27 @@ max_matches = 3
     }
 
     #[test]
+    fn load_config_should_default_source_to_auto() {
+        let _guard = env_guard();
+        let (old_cwd, _repo_root) = with_repo_root();
+        let _cwd_guard = CwdGuard { old_cwd };
+
+        let _no_config = EnvVarGuard::remove("PETIT_TRAD_NO_CONFIG");
+        let _source_lang = EnvVarGuard::remove("PETIT_TRAD_SOURCE_LANG");
+        let _target_lang = EnvVarGuard::remove("PETIT_TRAD_TARGET_LANG");
+
+        let cli = CliArgs {
+            no_config: true,
+            ..CliArgs::default()
+        };
+
+        let result = load_config(&cli).expect("config should load");
+
+        assert_eq!(result.source_lang, "auto");
+        assert_eq!(result.target_lang, "fr");
+    }
+
+    #[test]
     fn load_config_should_keep_default_glossary_embedding_model_dir_when_not_overridden() {
         let _guard = env_guard();
         let (old_cwd, _repo_root) = with_repo_root();

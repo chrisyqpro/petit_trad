@@ -183,7 +183,7 @@ run_optional_model_smoke() {
   fi
 
   export SMOKE_MODEL_FILE="$model_path"
-  cmd="printf 'Hello\n' | PETIT_TRAD_GLOSSARY_ENABLED='' PETIT_TRAD_GLOSSARY_PATH='' PETIT_TRAD_GLOSSARY_EMBEDDING_MODEL_DIR='' PETIT_TRAD_GLOSSARY_MAX_MATCHES='' cargo run --quiet -p petit-tui -- --stdin --no-config --no-glossary --model \"\$SMOKE_MODEL_FILE\" --src en --tgt fr --gpu-layers 0"
+  cmd="printf 'Hello\n' | PETIT_TRAD_GLOSSARY_ENABLED='' PETIT_TRAD_GLOSSARY_PATH='' PETIT_TRAD_GLOSSARY_EMBEDDING_MODEL_DIR='' PETIT_TRAD_GLOSSARY_MAX_MATCHES='' cargo run --quiet -p petit-tui -- --stdin --no-config --no-glossary --model \"\$SMOKE_MODEL_FILE\" --src auto --tgt fr --gpu-layers 0"
   run_shell_capture "$cmd"
   unset SMOKE_MODEL_FILE
 

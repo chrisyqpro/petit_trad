@@ -77,7 +77,7 @@ impl Default for App {
         Self {
             input: String::new(),
             output: String::new(),
-            source_lang: "en".to_string(),
+            source_lang: "auto".to_string(),
             target_lang: "fr".to_string(),
             should_quit: false,
             is_loading: false,
@@ -173,6 +173,10 @@ impl App {
     }
 
     pub fn swap_languages(&mut self) {
+        if petit_core::language::is_auto_source(&self.source_lang) {
+            self.set_error_status("Cannot swap when source is auto");
+            return;
+        }
         std::mem::swap(&mut self.source_lang, &mut self.target_lang);
         self.set_info_status("Languages swapped");
     }
@@ -529,6 +533,53 @@ mod tests {
         let status = app.status_line.expect("status should be set");
         assert_eq!(status.kind, StatusKind::Error);
         assert!(status.text.contains("Unsupported language"));
+    }
+
+    #[test]
+    fn source_language_edit_accepts_auto() {
+        let mut app = App::with_languages("en".to_string(), "fr".to_string(), false);
+        app.begin_language_edit(LangTarget::Source);
+        if let Some(edit) = app.lang_edit.as_mut() {
+            edit.buffer = "auto".to_string();
+            edit.cursor = edit.buffer.chars().count();
+        }
+
+        app.submit_language_edit();
+
+        assert_eq!(app.source_lang, "auto");
+        let status = app.status_line.expect("status should be set");
+        assert_eq!(status.kind, StatusKind::Success);
+        assert_eq!(status.text, "Language updated");
+    }
+
+    #[test]
+    fn target_language_edit_rejects_auto() {
+        let mut app = App::with_languages("en".to_string(), "fr".to_string(), false);
+        app.begin_language_edit(LangTarget::Target);
+        if let Some(edit) = app.lang_edit.as_mut() {
+            edit.buffer = "auto".to_string();
+            edit.cursor = edit.buffer.chars().count();
+        }
+
+        app.submit_language_edit();
+
+        assert_eq!(app.target_lang, "fr");
+        let status = app.status_line.expect("status should be set");
+        assert_eq!(status.kind, StatusKind::Error);
+        assert!(status.text.contains("Unsupported language"));
+    }
+
+    #[test]
+    fn swap_languages_rejects_auto_source() {
+        let mut app = App::default();
+
+        app.swap_languages();
+
+        assert_eq!(app.source_lang, "auto");
+        assert_eq!(app.target_lang, "fr");
+        let status = app.status_line.expect("status should be set");
+        assert_eq!(status.kind, StatusKind::Error);
+        assert_eq!(status.text, "Cannot swap when source is auto");
     }
 }
 

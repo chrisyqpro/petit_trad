@@ -135,6 +135,9 @@ pub trait Translator {
 }
 ```
 
+`source_lang` accepts either an explicit supported language code or the reserved sentinel `auto`.
+`target_lang` remains an explicit supported language code.
+
 ### Configuration
 
 ```rust
@@ -197,6 +200,9 @@ CLI args > Environment vars > Config file > Defaults
 The glossary subsystem follows the same precedence rules and lives in `petit-core` so that all
 frontends share one retrieval and prompt path.
 
+The default source language is `auto`; explicit source selection remains supported through the same
+precedence chain.
+
 ### Optional Glossary Retrieval
 
 - Glossary retrieval is optional and disabled by default.
@@ -204,8 +210,12 @@ frontends share one retrieval and prompt path.
   with `fastembed`, and builds one HNSW index per normalized language pair.
 - The embedding model is user-managed under `models/` and loaded from an explicit local directory;
   glossary startup must not download model assets automatically.
-- Translation requests query the pair-specific index, promote exact substring matches ahead of
-  ANN-only matches, and inject a compact glossary block into the TranslateGemma prompt.
+- Translation requests with an explicit source query the pair-specific index, promote exact
+  substring matches ahead of ANN-only matches, and inject a compact glossary block into the
+  TranslateGemma prompt.
+- Translation requests with `source_lang = "auto"` fan out across all source-language buckets for
+  the requested target language, then merge exact and ANN matches deterministically before prompt
+  injection.
 - If glossary config is invalid, translator startup fails fast.
 
 ---

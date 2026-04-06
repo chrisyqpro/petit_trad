@@ -53,6 +53,10 @@ When glossary support is enabled and a glossary file is configured:
 When glossary support is disabled, or when no candidates are found for the current request,
 translation behavior remains the same as today.
 
+The translator also supports a source-language sentinel value `auto`. In that mode, the model is
+asked to infer the source language from the request text, but glossary retrieval must still stay
+available.
+
 ## Configuration Design
 
 Glossary configuration belongs in `petit-core::Config` and follows the same precedence as the rest
@@ -196,15 +200,21 @@ The EmbeddingGemma asset is treated like the TranslateGemma GGUF asset:
 For each translation request:
 
 1. Normalize `source_lang` and `target_lang`.
-2. Resolve the pair-specific glossary index.
+2. Resolve the glossary search scope:
+   - explicit source: the pair-specific index for `(source_lang, target_lang)`
+   - `auto` source: every pair index whose target language matches `target_lang`
 3. Embed the full source input with `EmbeddingGemma300M`.
-4. Query the HNSW index for a fixed number of nearest candidates.
+4. Query the relevant HNSW index or indices for a fixed number of nearest candidates.
 5. Score exact normalized substring matches separately.
 6. Merge results with exact matches ranked ahead of ANN-only matches.
 7. Deduplicate by normalized source term.
 8. Truncate to `max_matches`.
 
 If no candidates survive, the translator uses the plain prompt path.
+
+For `auto` source mode, the merge across source-language buckets must stay deterministic. Ties are
+broken by the same stable ordering rules used in explicit-pair mode, with language-pair ordering
+applied before final truncation when needed.
 
 ### Exact-Match Promotion
 
@@ -237,22 +247,72 @@ To preserve determinism:
 
 ## Prompt Design
 
-The base TranslateGemma direct format stays intact. The glossary feature extends the user turn with
-a compact glossary block.
-
-### No Glossary Candidates
+The base TranslateGemma direct format stays intact conceptually, but all prompt variants share the
+same translation-only output instruction:
 
 ```text
-<start_of_turn>user
-[en->fr] Hello, how are you?<end_of_turn>
-<start_of_turn>model
+Return only the translation of source text.
+Do not explain the source language.
+Do not add notes, quotes, or extra formatting.
 ```
 
-### With Glossary Candidates
+The glossary feature extends the user turn with a compact glossary block.
+
+### No Glossary Candidates with Explicit Source
 
 ```text
 <start_of_turn>user
 [en->fr]
+Return only the translation of source text.
+Do not explain the source language.
+Do not add notes, quotes, or extra formatting.
+
+Text:
+Hello, how are you?<end_of_turn>
+<start_of_turn>model
+```
+
+### No Glossary Candidates with Auto Source
+
+```text
+<start_of_turn>user
+Translate the text below into fr.
+Infer the source language from the text itself.
+Return only the translation of source text.
+Do not explain the source language.
+Do not add notes, quotes, or extra formatting.
+
+Text:
+Hello, how are you?<end_of_turn>
+<start_of_turn>model
+```
+
+### With Glossary Candidates and Explicit Source
+
+```text
+<start_of_turn>user
+[en->fr]
+Return only the translation of source text.
+Do not explain the source language.
+Do not add notes, quotes, or extra formatting.
+Use the glossary terms exactly when they match the source text:
+- account balance -> solde du compte
+- savings account -> compte d'epargne
+
+Text:
+Your balance is available in the savings account.<end_of_turn>
+<start_of_turn>model
+```
+
+### With Glossary Candidates and Auto Source
+
+```text
+<start_of_turn>user
+Translate the text below into fr.
+Infer the source language from the text itself.
+Return only the translation of source text.
+Do not explain the source language.
+Do not add notes, quotes, or extra formatting.
 Use the glossary terms exactly when they match the source text:
 - account balance -> solde du compte
 - savings account -> compte d'epargne
@@ -268,6 +328,7 @@ Rules:
 - Only `source_term -> target_term` pairs are injected.
 - `note` is not injected in v1.
 - The glossary block is emitted before the `Text:` payload.
+- The shared translation-only instruction appears in every prompt variant.
 - Output format remains direct translation only.
 
 This preserves the current one-user-turn prompt style while giving the model a clear terminology

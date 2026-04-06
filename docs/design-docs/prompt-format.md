@@ -13,7 +13,7 @@ Discovered conventions for TranslateGemma models based on prototype testing.
 
 ## Prompt Template
 
-TranslateGemma supports two prompt formats:
+TranslateGemma supports two direct text-translation prompt families in this project:
 
 ### 1. HuggingFace Structured Format (transformers)
 
@@ -41,30 +41,84 @@ prompt = tokenizer.apply_chat_template(
 )
 ```
 
-### 2. Direct Format (llama-cpp / GGUF)
+### 2. Direct Format with Explicit Source (llama-cpp / GGUF)
 
-For use with llama.cpp or raw inference - simpler and produces cleaner output:
+Use this when the source language is explicitly configured:
 
-```sh
+```text
 <start_of_turn>user
-[en->fr] Hello, how are you?<end_of_turn>
+[en->fr]
+Return only the translation of source text.
+Do not explain the source language.
+Do not add notes, quotes, or extra formatting.
+
+Text:
+Hello, how are you?<end_of_turn>
 <start_of_turn>model
 ```
 
 This format:
 
 - Uses `[source->target]` notation with ISO 639-1 codes
-- Produces direct translations without explanations
+- Adds a shared translation-only instruction block
 - Works well with GGUF quantized models
 
-### 3. Direct Format with Glossary Constraints
+### 3. Direct Format with Auto Source Detection
+
+Use this when the configured source language is the sentinel value `auto`:
+
+```text
+<start_of_turn>user
+Translate the text below into fr.
+Infer the source language from the text itself.
+Return only the translation of source text.
+Do not explain the source language.
+Do not add notes, quotes, or extra formatting.
+
+Text:
+Hello, how are you?<end_of_turn>
+<start_of_turn>model
+```
+
+Rules:
+
+- `auto` is accepted only for the source side.
+- The target language must still be an explicit supported language code.
+- The model is asked to infer the source language from the user text, but the output contract stays
+  translation-only.
+
+### 4. Direct Format with Glossary Constraints
 
 When glossary retrieval is enabled and candidate terms are found, the user turn is extended with a
-compact glossary block:
+compact glossary block. The same translation-only instruction is shared across glossary and
+non-glossary prompts.
+
+#### Explicit source + glossary
 
 ```text
 <start_of_turn>user
 [en->fr]
+Return only the translation of source text.
+Do not explain the source language.
+Do not add notes, quotes, or extra formatting.
+Use the glossary terms exactly when they match the source text:
+- account balance -> solde du compte
+- savings account -> compte d'epargne
+
+Text:
+Your balance is available in the savings account.<end_of_turn>
+<start_of_turn>model
+```
+
+#### Auto source + glossary
+
+```text
+<start_of_turn>user
+Translate the text below into fr.
+Infer the source language from the text itself.
+Return only the translation of source text.
+Do not explain the source language.
+Do not add notes, quotes, or extra formatting.
 Use the glossary terms exactly when they match the source text:
 - account balance -> solde du compte
 - savings account -> compte d'epargne
@@ -80,6 +134,7 @@ Rules for glossary mode:
 - Inject only the selected `source_term -> target_term` pairs.
 - Emit the glossary block only when at least one candidate is available.
 - Keep the candidate list short and deterministic.
+- Keep the shared translation-only instruction in glossary prompts as well.
 - Do not include explanatory prose in the expected model output.
 
 When glossary retrieval is enabled but no candidates survive selection, fall back to the normal
@@ -93,6 +148,9 @@ Use ISO 639-1 Alpha-2 codes, optionally with region:
 - Regional: `en-US`, `en-GB`, `de-DE`, `pt-BR`
 
 Supported languages: 55 total (see model card for full list).
+
+The project also reserves `auto` as a source-only sentinel. It is not treated as a model language
+code.
 
 ## Generation Config
 
@@ -163,7 +221,10 @@ For practical use:
 
 - Glossary retrieval is a pre-inference prompt-construction step in `petit-core`.
 - V1 uses `fastembed` with `EmbeddingGemma300M` for source-text embeddings.
-- V1 uses `hnsw_rs` for pair-specific ANN lookup.
+- V1 uses `hnsw_rs` for pair-specific ANN lookup when source is explicit.
+- In `auto` source mode, glossary retrieval fans out across all source-language buckets for the
+  requested target language, then merges candidates with the same deterministic exact+ANN ranking
+  rules before prompt injection.
 - Exact normalized source-term matches are ranked ahead of ANN-only candidates.
 - `note` fields from the glossary TSV are metadata only and are not injected into the prompt in v1.
 
