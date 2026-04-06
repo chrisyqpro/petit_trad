@@ -30,6 +30,24 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
+      - name: Install Node toolchain
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install markdown and shell formatters
+        run: npm install --global prettier markdownlint-cli2
+
+      - name: Install shell tooling on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck shfmt
+
+      - name: Install shell tooling on macOS
+        if: runner.os == 'macOS'
+        run: brew install shellcheck shfmt
+
       - name: Verify script
         run: ./scripts/check.sh
 
