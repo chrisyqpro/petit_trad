@@ -214,8 +214,9 @@ The repository includes:
 
 - `.github/workflows/ci.yml`: runs CPU-only checks on `ubuntu-latest` and `macos-latest` for push
   and pull request events to `main`
-- `.github/workflows/release.yml`: runs on pushed tags matching `v*`, builds release binaries, and
-  publishes `tar.gz` assets to a GitHub release
+- `.github/workflows/release.yml`: runs on pushed tags matching `v*`, builds a CPU-only Linux
+  release plus backend-specific GPU builds (`cuda` on Linux, `metal` on macOS), and publishes the
+  resulting `tar.gz` assets to a GitHub release
 
 ## Release Commands
 
@@ -229,7 +230,8 @@ git push origin v0.1.0
 After the workflow completes, the release should include:
 
 - `petit-v0.1.0-linux-x64.tar.gz`
-- `petit-v0.1.0-macos-arm64.tar.gz`
+- `petit-v0.1.0-linux-x64-cuda.tar.gz`
+- `petit-v0.1.0-macos-arm64-metal.tar.gz`
 
 ## Troubleshooting
 

@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -31,9 +31,9 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install Node toolchain
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Install markdown and shell formatters
         run: npm install --global prettier markdownlint-cli2
